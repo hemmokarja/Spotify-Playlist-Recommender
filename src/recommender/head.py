@@ -84,35 +84,35 @@ class SampledSoftmaxLoss(nn.Module):
 class SampledSoftmaxPredictionHead(nn.Module):
     def __init__(
         self,
+        track_embedder,
         vocab_size,
         loss_kwargs=None,
         sampler_kwargs=None,
-        item_embedding_fn=None,
     ):
         super().__init__()
+        self.track_embedder = track_embedder
         self.vocab_size = vocab_size
-        self.item_embedding_fn = item_embedding_fn
         self.sampler = PopularitySampler(**sampler_kwargs)
         self.loss_fn = SampledSoftmaxLoss(**loss_kwargs)
 
-    def _compute_loss(self, emb, y) -> float:
-        # emb: [B, T, C]
+    def _compute_loss(self, hidden, y) -> float:
+        # hidden: [B, T, C]
         # y: [B, T]
-        emb = emb.view(-1, emb.size(-1))  # [B', C]
+        hidden = hidden.view(-1, hidden.size(-1))  # [B', C]
         y = y.view(-1)  # [B']
 
         mask = y != 0
-        emb = emb[mask]
+        hidden = hidden[mask]
         y = y[mask]
 
         sampler_output = self.sampler(y)
         sampled_indices = sampler_output.sampled_indices  # [n_samples]
 
-        pos_item_emb = self.item_embedding_fn(y)  # [B', C]
-        neg_item_emb = self.item_embedding_fn(sampled_indices)  # [n_samples, C]
+        e_pos = self.track_embedder(y)  # [B', C]
+        e_neg = self.track_embedder(sampled_indices)  # [n_samples, C]
 
-        pos_logits = (emb * pos_item_emb).sum(dim=1)  # [B']
-        neg_logits = emb @ neg_item_emb.T  # [B', n_samples]
+        pos_logits = (hidden * e_pos).sum(dim=1)  # [B']
+        neg_logits = hidden @ e_neg.T  # [B', n_samples]
 
         # mask false negatives
         collision_mask = y.view(-1, 1) == sampled_indices.view(1, -1)  # [B', n_samples]
@@ -125,27 +125,27 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def _get_full_probs(self, emb, allowed_mask=None):
-        # emb: [B, C]
+    def _get_full_probs(self, hidden, allowed_mask=None):
+        # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
-        all_indices = torch.arange(self.vocab_size, device=emb.device)
-        all_item_embs = self.item_embedding_fn(all_indices)  # [vocab_size, C]
-        logits = emb @ all_item_embs.T
+        all_indices = torch.arange(self.vocab_size, device=hidden.device)
+        e_track = self.track_embedder(all_indices)  # [vocab_size, C]
+        logits = hidden @ e_track.T
 
         if allowed_mask is not None:
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
 
         return F.softmax(logits, dim=-1)  # [B, vocab_size]
 
-    def forward(self, emb, y=None, allowed_mask=None, inference=False):
-        # emb: [B, T, C]
+    def forward(self, hidden, y=None, allowed_mask=None, inference=False):
+        # hidden: [B, T, C]
         # y: [B, T]
         # allowed_mask: [vocab_size] (optional)
         if inference:
             with torch.no_grad():
-                last_step_probs = self._get_full_probs(emb[:, -1, :], allowed_mask)  # [B, vocab_size]
+                last_step_probs = self._get_full_probs(hidden[:, -1, :], allowed_mask)  # [B, vocab_size]
         else:
             last_step_probs = None
 
-        loss = self._compute_loss(emb, y) if y is not None else None
+        loss = self._compute_loss(hidden, y) if y is not None else None
         return last_step_probs, loss

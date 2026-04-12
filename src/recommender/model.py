@@ -36,7 +36,7 @@ class PlaylistRecommender(nn.Module):
             tensoriser.vocab_size,
             config.loss_kwargs,
             config.sampler_kwargs,
-            item_embedding_fn=self.track_embedder
+            embedder=embedder,
         )
 
         logger.info(
