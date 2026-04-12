@@ -1,24 +1,62 @@
+import os
+
+import huggingface_hub
+import requests
+import structlog
 import torch
 import torch.nn as nn
+from huggingface_hub.utils import GatedRepoError
+from sentence_transformers import SentenceTransformer
 
 from recommender.model_config import ModelConfig
 
+logger = structlog.get_logger(__name__)
+
+
+class PlaylistNameEmbedder(nn.Module):
+    MODEL_ID = "google/embeddinggemma-300m"
+
+    def __init__(self, config: ModelConfig, model: SentenceTransformer):
+        super().__init__()
+        self.config = config
+
+        self.model = model
+        for param in self.model.parameters():
+            param.requires_grad = False
+        self.model.eval()
+
+        self.proj = nn.Linear(config.d_name, config.d_model)
+
+    def forward(self, names: list[str]) -> torch.Tensor:
+        with torch.no_grad():
+            e_name = self.model.encode(names, convert_to_tensor=True)  # [B, d_name]
+        return self.proj(e_name)  # [B, d_model]
+
+    @classmethod
+    def from_config(cls, config: ModelConfig) -> "PlaylistNameEmbedder":
+        try:
+            emb_model = SentenceTransformer(cls.MODEL_ID)
+        except (OSError, GatedRepoError, requests.exceptions.HTTPError):
+            logger.info("Loading a model that requires huggingface login...")
+            hf_token = os.getenv("HF_TOKEN")
+            if not hf_token:
+                raise RuntimeError("Missing HF_TOKEN environment variable!")
+            huggingface_hub.login(hf_token)
+            emb_model = SentenceTransformer(cls.MODEL_ID)
+        return cls(config, emb_model)
+
+    def state_dict(self, **kwargs) -> dict:
+        return self.proj.state_dict(**kwargs)
+
+    def load_state_dict(self, state_dict: dict, strict: bool = True):
+        self.proj.load_state_dict(state_dict, strict=strict)
+
 
 class TrackEmbedder(nn.Module):
-    """
-    Args:
-        artist_vocab_size: vocabulary size for artist IDs
-        cat_vocab_sizes:   list of vocab sizes for each categorical feature
-                           (must match order of Tensoriser.CAT_FEATURES)
-        total_dim:         total output embedding dimension D (default 128)
-        artist_dim:        artist embedding dim (default D // 4)
-        cont_dim:          continuous projection output dim (default D // 2)
-        dropout:           dropout probability applied before final projection
-    """
     N_CONT = 9
 
     def __init__(
-        self, artist_vocab_size: int, cat_vocab_sizes: list[int], config: ModelConfig,
+        self, config: ModelConfig, artist_vocab_size: int, cat_vocab_sizes: list[int]
     ):
         super().__init__()
 

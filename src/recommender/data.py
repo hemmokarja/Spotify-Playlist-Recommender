@@ -23,12 +23,8 @@ class Tensoriser:
         "time_signature_index",
     ]
 
-    def __init__(self):
-        self.tracks = (
-            pd.read_parquet("./.data/data/tracks.parquet")
-            .sort_values("track_id")
-            .reset_index(drop=True)
-        )
+    def __init__(self, tracks):
+        self.tracks = tracks.sort_values("track_id").reset_index(drop=True)
 
         self.cont_feat_mapping = self.tracks[self.CONT_FEATURES].to_numpy()
         self.cat_feat_mapping = self.tracks[self.CAT_FEATURES].to_numpy()
@@ -86,12 +82,20 @@ class Tensoriser:
         return collated_batch
 
     @property
-    def n_artists(self):
+    def artist_vocab_size(self):
         return int(self.tracks.artist_index.nunique())
 
     @property
     def cat_vocab_sizes(self):
         return [int(self.tracks[f].nunique()) for f in self.CAT_FEATURES]
+
+    def as_dict(self):
+        return self.tracks.to_dict("records")
+
+    @classmethod
+    def from_dict(cls, d):
+        tracks = pd.DataFrame(d)
+        return cls(tracks)
 
 
 class PlaylistDataset(Dataset):
