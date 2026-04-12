@@ -35,10 +35,10 @@ class PopularitySampler(nn.Module):
     def __init__(
         self,
         item_mapping,
-        n_samples,
-        smoothing_factor=1.0,
-        uniform_mix_factor=None,
-        replacement=False,
+        n_samples: int,
+        smoothing_factor: float = 1.0,
+        uniform_mix_factor: float | None = None,
+        replacement: bool = False,
     ):
         super().__init__()
         self.n_samples = n_samples
@@ -49,7 +49,7 @@ class PopularitySampler(nn.Module):
         )  # [vocab_size]
         self.register_buffer("sampling_probs", sampling_probs)  # [vocab_size]
 
-    def forward(self, y):
+    def forward(self, y) -> _SamplerOutput:
         # y: [B] positive item indices
         sampled_indices = torch.multinomial(
             self.sampling_probs, self.n_samples, replacement=self.replacement
@@ -62,11 +62,11 @@ class PopularitySampler(nn.Module):
 
 
 class SampledSoftmaxLoss(nn.Module):
-    def __init__(self, temperature=1.0):
+    def __init__(self, temperature: float = 1.0):
         super().__init__()
         self.temperature = temperature
 
-    def forward(self, pos_logits, neg_logits, true_probs, sample_probs):
+    def forward(self, pos_logits, neg_logits, true_probs, sample_probs) -> float:
         # pos_logits: [B] logits for positive items
         # neg_logits: [B, n_samples] logits for negative items
         # true_probs: [B] sampling probabilities for positive items
@@ -95,7 +95,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = PopularitySampler(**sampler_kwargs)
         self.loss_fn = SampledSoftmaxLoss(**loss_kwargs)
 
-    def _compute_loss(self, emb, y):
+    def _compute_loss(self, emb, y) -> float:
         # emb: [B, T, C]
         # y: [B, T]
         emb = emb.view(-1, emb.size(-1))  # [B', C]
@@ -125,18 +125,25 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def _get_full_probs(self, emb):
+    def _get_full_probs(self, emb, allowed_mask=None):
         # emb: [B, C]
+        # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=emb.device)
         all_item_embs = self.item_embedding_fn(all_indices)  # [vocab_size, C]
-        return F.softmax(emb @ all_item_embs.T, dim=-1)  # [B, vocab_size]
+        logits = emb @ all_item_embs.T
 
-    def forward(self, emb, y=None, inference=False):
+        if allowed_mask is not None:
+            logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
+
+        return F.softmax(logits, dim=-1)  # [B, vocab_size]
+
+    def forward(self, emb, y=None, allowed_mask=None, inference=False):
         # emb: [B, T, C]
         # y: [B, T]
+        # allowed_mask: [vocab_size] (optional)
         if inference:
             with torch.no_grad():
-                last_step_probs = self._get_full_probs(emb[:, -1, :])  # [B, vocab_size]
+                last_step_probs = self._get_full_probs(emb[:, -1, :], allowed_mask)  # [B, vocab_size]
         else:
             last_step_probs = None
 

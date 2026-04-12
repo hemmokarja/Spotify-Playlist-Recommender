@@ -50,17 +50,19 @@ class PlaylistRecommender(nn.Module):
         name: list[str],
         x: torch.Tensor,
         y: torch.Tensor | None = None,
+        allowed_mask: torch.Tensor | None = None,
         inference: bool = False
     ):
         # name: [B]
         # x: [B, T-1]
         # y: [B, T] (optional)
+        # allowed_mask: [vocab_size] (optional)
         e_name = self.name_embedder(name)  # [B, C]
         e_track = self.track_embedder(x)  # [B, T-1, C]
         e = torch.concat([e_name.unsqueeze(1), e_track], dim=1)  # [B, T, C]
         e = self.block_stack(e)  # [B, T, C]
 
-        last_step_probs, loss = self.head(e, y, inference)
+        last_step_probs, loss = self.head(e, y, allowed_mask, inference)
 
         return last_step_probs, loss
 
