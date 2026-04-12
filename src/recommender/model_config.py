@@ -11,3 +11,5 @@ class ModelConfig:
     dropout: float = 0.0
     bias: bool = True
     rope_base: float = 10_000.0
+    loss_kwargs: dict | None = None
+    sampler_kwargs: dict | None = None
