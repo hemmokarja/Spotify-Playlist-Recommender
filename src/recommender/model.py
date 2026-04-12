@@ -55,7 +55,7 @@ class PlaylistRecommender(nn.Module):
 
     @classmethod
     def from_config(cls, config) -> "PlaylistRecommender":
-        tracks = pd.read_parquet("./.data/data/tracks.parquet")
+        tracks = pd.read_parquet("data/data/tracks.parquet")
         tensoriser = Tensoriser(tracks)
 
         name_embedder = PlaylistNameEmbedder.from_config(config)

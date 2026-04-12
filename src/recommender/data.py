@@ -72,7 +72,7 @@ class Tensoriser:
 
 class PlaylistDataset(Dataset):
     def __init__(self, split, tensoriser: Tensoriser):
-        self.df = pd.read_parquet(f".data/data/{split}.parquet")
+        self.df = pd.read_parquet(f"data/data/{split}.parquet")
         self.tensoriser = tensoriser
 
     def __len__(self) -> int:
