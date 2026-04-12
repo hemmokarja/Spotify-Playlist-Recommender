@@ -74,9 +74,9 @@ class TrackEmbedder(nn.Module):
         d_artist = config.d_artist or d_model // 4
         d_cont = config.d_cont or d_model // 2
 
-        self.register_buffer("cont_feat_mapping", cont_feat_mapping, persistent=False)
-        self.register_buffer("cat_feat_mapping", cat_feat_mapping, persistent=False)
-        self.register_buffer("artist_mapping", artist_mapping, persistent=False)
+        self.register_buffer("cont_feat_mapping", cont_feat_mapping, persistent=False)  # [vocab_size, n_cont]
+        self.register_buffer("cat_feat_mapping", cat_feat_mapping, persistent=False)  # [vocab_size, n_cat]
+        self.register_buffer("artist_mapping", artist_mapping, persistent=False)  # [vocab_size]
 
         artist_vocab_size = int(artist_mapping.max().item()) + 1
 
@@ -126,18 +126,18 @@ class TrackEmbedder(nn.Module):
 
     def forward(self, x):
         # x: [B, T]
-        x_cont = self.cont_feat_mapping[x]
-        x_cat = self.cat_feat_mapping[x]
-        x_artist = self.artist_mapping[x]
+        x_cont = self.cont_feat_mapping[x]  # [B, T, n_cont]
+        x_cat = self.cat_feat_mapping[x]  # [B, T, n_cat]
+        x_artist = self.artist_mapping[x]  # [B, T]
 
-        e_artist = self.artist_emb(x_artist)
-        e_cont = self.cont_mlp(x_cont)
+        e_artist = self.artist_emb(x_artist)  # [B, T, d_artist]
+        e_cont = self.cont_mlp(x_cont)  # [B, T, d_cont]
 
-        e_cats = [emb(x_cat[..., i]) for i, emb in enumerate(self.cat_embs)]
-        e_cat = torch.cat(e_cats, dim=-1)
+        e_cats = [emb(x_cat[..., i]) for i, emb in enumerate(self.cat_embs)]  # [B, T, d_per_cat] each
+        e_cat = torch.cat(e_cats, dim=-1)  # [B, T, d_cat]
 
-        e = torch.cat([e_artist, e_cont, e_cat], dim=-1)
-        return self.ln(self.proj(self.dropout(e)))
+        e = torch.cat([e_artist, e_cont, e_cat], dim=-1)  # [B, T, d_concat]
+        return self.ln(self.proj(self.dropout(e)))  # [B, T, d_model]
 
 
 class CausalSelfAttentionWithROPE(nn.Module):
