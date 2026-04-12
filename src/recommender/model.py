@@ -139,7 +139,7 @@ class PlaylistRecommenderInference:
         batch = {
             k: _handle_batching(v, device) for k, v in sample.items()
         }
-        probs = self.last_step_probs(**batch)
+        probs = self.last_step_probs(**batch, allowed_mask=allowed_mask)
         # TODO finnish
 
         self.model.training(was_training)
