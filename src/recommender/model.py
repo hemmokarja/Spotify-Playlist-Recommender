@@ -33,10 +33,10 @@ class PlaylistRecommender(nn.Module):
         self.block_stack = block_stack
 
         self.head = SampledSoftmaxPredictionHead(
+            self.track_embedder,
             tensoriser.vocab_size,
             config.loss_kwargs,
             config.sampler_kwargs,
-            embedder=embedder,
         )
 
         logger.info(
@@ -45,26 +45,22 @@ class PlaylistRecommender(nn.Module):
             f"(of which {self.num_params(trainable_only=True) / 1e6 :.2f} M trainable)"
         )
 
-    def forward(
-        self,
-        name: list[str],
-        x: torch.Tensor,
-        y: torch.Tensor | None = None,
-        allowed_mask: torch.Tensor | None = None,
-        inference: bool = False
-    ):
+    def propagate_hidden(self, name: list[str], x: torch.Tensor):
         # name: [B]
         # x: [B, T-1]
-        # y: [B, T] (optional)
-        # allowed_mask: [vocab_size] (optional)
         e_name = self.name_embedder(name)  # [B, C]
         e_track = self.track_embedder(x)  # [B, T-1, C]
         e = torch.concat([e_name.unsqueeze(1), e_track], dim=1)  # [B, T, C]
         e = self.block_stack(e)  # [B, T, C]
+        return e
 
-        last_step_probs, loss = self.head(e, y, allowed_mask, inference)
-
-        return last_step_probs, loss
+    def forward(self, name: list[str], x: torch.Tensor, y: torch.Tensor | None = None):
+        # name: [B]
+        # x: [B, T-1]
+        # y: [B, T] (optional)
+        e = self.propagate_hidden(name, x)
+        loss = self.head.loss(e, y)
+        return loss
 
     @classmethod
     def from_config(cls, config) -> "PlaylistRecommender":

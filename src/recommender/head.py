@@ -66,7 +66,7 @@ class SampledSoftmaxLoss(nn.Module):
         super().__init__()
         self.temperature = temperature
 
-    def forward(self, pos_logits, neg_logits, true_probs, sample_probs) -> float:
+    def forward(self, pos_logits, neg_logits, true_probs, sample_probs):
         # pos_logits: [B] logits for positive items
         # neg_logits: [B, n_samples] logits for negative items
         # true_probs: [B] sampling probabilities for positive items
@@ -95,7 +95,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = PopularitySampler(**sampler_kwargs)
         self.loss_fn = SampledSoftmaxLoss(**loss_kwargs)
 
-    def _compute_loss(self, hidden, y) -> float:
+    def loss(self, hidden, y):
         # hidden: [B, T, C]
         # y: [B, T]
         hidden = hidden.view(-1, hidden.size(-1))  # [B', C]
@@ -125,7 +125,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def _get_full_probs(self, hidden, allowed_mask=None):
+    def full_probs(self, hidden, allowed_mask=None):
         # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=hidden.device)
@@ -136,16 +136,3 @@ class SampledSoftmaxPredictionHead(nn.Module):
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
 
         return F.softmax(logits, dim=-1)  # [B, vocab_size]
-
-    def forward(self, hidden, y=None, allowed_mask=None, inference=False):
-        # hidden: [B, T, C]
-        # y: [B, T]
-        # allowed_mask: [vocab_size] (optional)
-        if inference:
-            with torch.no_grad():
-                last_step_probs = self._get_full_probs(hidden[:, -1, :], allowed_mask)  # [B, vocab_size]
-        else:
-            last_step_probs = None
-
-        loss = self._compute_loss(hidden, y) if y is not None else None
-        return last_step_probs, loss
