@@ -129,7 +129,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         # emb: [B, C]
         all_indices = torch.arange(self.vocab_size, device=emb.device)
         all_item_embs = self.item_embedding_fn(all_indices)  # [vocab_size, C]
-        return F.log_softmax(emb @ all_item_embs.T, dim=-1)  # [B, vocab_size]
+        return F.softmax(emb @ all_item_embs.T, dim=-1)  # [B, vocab_size]
 
     def forward(self, emb, y=None, inference=False):
         # emb: [B, T, C]
