@@ -12,6 +12,8 @@ from recommender.model_config import ModelConfig
 
 logger = structlog.get_logger(__name__)
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 class PlaylistNameEmbedder(nn.Module):
     MODEL_ID = "google/embeddinggemma-300m"

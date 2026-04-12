@@ -1,4 +1,3 @@
-import os
 from dataclasses import asdict
 
 import pandas as pd
@@ -13,8 +12,6 @@ from recommender.layers import (
 from recommender.model_config import ModelConfig
 
 logger = structlog.get_logger(__name__)
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 class PlaylistRecommender(nn.Module):
