@@ -127,7 +127,11 @@ class PlaylistRecommenderInference:
         probs = self.model.head.full_probs(e[:, -1, :], allowed_mask)
         return probs
 
-    def get_recommendations(self, playlist_name: str, playlist: list[int]):
+    def get_recommendations(
+        self, playlist_name: str,
+        playlist: list[int],
+        allowed_mask: torch.Tensor | None = None,
+    ):
         was_training = self.model.training
         self.model.eval()
         device = self.model.get_device()
