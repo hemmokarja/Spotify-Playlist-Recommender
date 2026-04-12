@@ -40,27 +40,26 @@ class PlaylistRecommender(nn.Module):
 
     def forward(
         self,
-        name: list[str],  # [B]
-        x_artist: torch.Tensor,  # [B, T-1]
-        x_cont: torch.Tensor,  # [B, T-1, n_cont]
-        x_cat: torch.Tensor,  # [B, T-1, n_cat]
-        y: torch.Tensor | None = None,  # [B, T]
+        name: list[str],
+        x: torch.Tensor,
+        y: torch.Tensor | None = None,
         inference: bool = False
     ):
+        # name: [B]
+        # x: [B, T-1]
+        # y: [B, T] (optional)
         e_name = self.name_embedder(name)  # [B, C]
-        e_track = self.track_embedder(x_artist, x_cont, x_cat)  # [B, T-1, C]
+        e_track = self.track_embedder(x)  # [B, T-1, C]
         e = torch.concat([e_name.unsqueeze(1), e_track], dim=1)  # [B, T, C]
         e = self.block_stack(e)  # [B, T, C]
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "PlaylistRecommender":
         tracks = pd.read_parquet("./.data/data/tracks.parquet")
         tensoriser = Tensoriser(tracks)
-        
+
         name_embedder = PlaylistNameEmbedder.from_config(config)
-        track_embedder = TrackEmbedder(
-            config, tensoriser.artist_vocab_size, tensoriser.cat_vocab_sizes,
-        )
+        track_embedder = TrackEmbedder.from_config_and_tensoriser(config, tensoriser)
         block_stack = TransformerBlockStack(config)
 
         return cls(config, tensoriser, name_embedder, track_embedder, block_stack)
@@ -83,11 +82,10 @@ class PlaylistRecommender(nn.Module):
         tensoriser = Tensoriser.from_dict(d["tensoriser"])
 
         name_embedder = PlaylistNameEmbedder.from_config(config)
-        track_embedder = TrackEmbedder(
-            config, tensoriser.artist_vocab_size, tensoriser.cat_vocab_sizes,
-        )
+        track_embedder = TrackEmbedder.from_config_and_tensoriser(config, tensoriser)
+        block_stack = TransformerBlockStack(config)
 
-        model = cls(config, tensoriser, name_embedder, track_embedder)
+        model = cls(config, tensoriser, name_embedder, track_embedder, block_stack)
 
         for name, state in d["states"].items():
             getattr(model, name).load_state_dict(state)

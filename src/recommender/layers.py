@@ -8,6 +8,7 @@ import torch.nn as nn
 from huggingface_hub.utils import GatedRepoError
 from sentence_transformers import SentenceTransformer
 
+from recommender.data import Tensoriser
 from recommender.model_config import ModelConfig
 
 logger = structlog.get_logger(__name__)
@@ -59,18 +60,27 @@ class TrackEmbedder(nn.Module):
     N_CONT = 9
 
     def __init__(
-        self, config: ModelConfig, artist_vocab_size: int, cat_vocab_sizes: list[int]
+        self,
+        config: ModelConfig,
+        cont_feat_mapping: torch.Tensor,
+        cat_feat_mapping: torch.Tensor,
+        artist_mapping: torch.Tensor,
+        cat_vocab_sizes: list[int],
     ):
         super().__init__()
-
         self.config = config
 
         d_model = config.d_model
         d_artist = config.d_artist or d_model // 4
         d_cont = config.d_cont or d_model // 2
 
-        self.artist_emb = nn.Embedding(artist_vocab_size, d_artist, padding_idx=0)
+        self.register_buffer("cont_feat_mapping", cont_feat_mapping, persistent=False)
+        self.register_buffer("cat_feat_mapping", cat_feat_mapping, persistent=False)
+        self.register_buffer("artist_mapping", artist_mapping, persistent=False)
 
+        artist_vocab_size = int(artist_mapping.max().item()) + 1
+
+        self.artist_emb = nn.Embedding(artist_vocab_size, d_artist, padding_idx=0)
         self.cont_mlp = nn.Sequential(
             nn.Linear(self.N_CONT, d_cont),
             nn.ReLU(),
@@ -94,18 +104,40 @@ class TrackEmbedder(nn.Module):
         self.ln = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(self, x_artist, x_cont, x_cat):
-        # x_artist: [B, T]
-        # x_cont: [B, T, n_cont]
-        # x_cat: [B, T, n_cat]
-        e_artist = self.artist_emb(x_artist)  # [B, T, d_artist]
-        e_cont = self.cont_mlp(x_cont)  # [B, T, d_cont]
+    @classmethod
+    def from_config_and_tensoriser(
+        cls, config: ModelConfig, tensoriser: Tensoriser
+    ) -> "TrackEmbedder":
+        tracks = tensoriser.tracks
+        cont_feat_mapping = torch.tensor(
+            tracks[tensoriser.CONT_FEATURES].to_numpy(), dtype=torch.float32
+        )
+        cat_feat_mapping = torch.tensor(
+            tracks[tensoriser.CAT_FEATURES].to_numpy(), dtype=torch.long
+        )
+        artist_mapping = torch.tensor(tracks.artist_index.to_numpy(), dtype=torch.long)
+        return cls(
+            config,
+            cont_feat_mapping,
+            cat_feat_mapping,
+            artist_mapping,
+            tensoriser.cat_vocab_sizes,
+        )
 
-        e_cats = [emb(x_cat[..., i]) for i, emb in enumerate(self.cat_embs)]  # [B, T, d_per_cat] each
-        e_cat = torch.cat(e_cats, dim=-1)   # [B, T, d_cat]
+    def forward(self, x):
+        # x: [B, T]
+        x_cont = self.cont_feat_mapping[x]
+        x_cat = self.cat_feat_mapping[x]
+        x_artist = self.artist_mapping[x]
 
-        e = torch.cat([e_artist, e_cont, e_cat], dim=-1)  # [B, T, d_concat]
-        return self.ln(self.proj(self.dropout(e)))  # [B, T, d_model]
+        e_artist = self.artist_emb(x_artist)
+        e_cont = self.cont_mlp(x_cont)
+
+        e_cats = [emb(x_cat[..., i]) for i, emb in enumerate(self.cat_embs)]
+        e_cat = torch.cat(e_cats, dim=-1)
+
+        e = torch.cat([e_artist, e_cont, e_cat], dim=-1)
+        return self.ln(self.proj(self.dropout(e)))
 
 
 class CausalSelfAttentionWithROPE(nn.Module):
