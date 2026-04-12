@@ -32,6 +32,13 @@ class PlaylistRecommender(nn.Module):
         self.track_embedder = track_embedder
         self.block_stack = block_stack
 
+        self.head = SampledSoftmaxPredictionHead(
+            tensoriser.vocab_size,
+            config.loss_kwargs,
+            config.sampler_kwargs,
+            item_embedding_fn=self.track_embedder
+        )
+
         logger.info(
             f"Initialized PlaylistRecommender with "
             f"{self.num_params() / 1e6 :.2f} M params "
@@ -52,6 +59,10 @@ class PlaylistRecommender(nn.Module):
         e_track = self.track_embedder(x)  # [B, T-1, C]
         e = torch.concat([e_name.unsqueeze(1), e_track], dim=1)  # [B, T, C]
         e = self.block_stack(e)  # [B, T, C]
+
+        last_step_probs, loss = self.head(e, y, inference)
+
+        return last_step_probs, loss
 
     @classmethod
     def from_config(cls, config) -> "PlaylistRecommender":

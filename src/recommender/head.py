@@ -96,8 +96,15 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.loss_fn = SampledSoftmaxLoss(**loss_kwargs)
 
     def _compute_loss(self, emb, y):
-        # emb: [B', C],
-        # y: [B']
+        # emb: [B, T, C]
+        # y: [B, T]
+        emb = emb.view(-1, emb.size(-1))  # [B', C]
+        y = y.view(-1)  # [B']
+
+        mask = y != 0
+        emb = emb[mask]
+        y = y[mask]
+
         sampler_output = self.sampler(y)
         sampled_indices = sampler_output.sampled_indices  # [n_samples]
 
@@ -118,25 +125,20 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def _get_loss(self, emb, y):
-        # emb: [B, T, C]
-        # y: [B, T]
-        emb_flat = emb.view(-1, emb.size(-1))  # [B*T, C]
-        y_flat = y.view(-1)  # [B*T]
-        mask = y_flat != 0
-        return self._compute_loss(emb_flat[mask], y_flat[mask])
-
-    def _get_full_logprobs(self, emb):
+    def _get_full_probs(self, emb):
         # emb: [B, C]
         all_indices = torch.arange(self.vocab_size, device=emb.device)
         all_item_embs = self.item_embedding_fn(all_indices)  # [vocab_size, C]
         return F.log_softmax(emb @ all_item_embs.T, dim=-1)  # [B, vocab_size]
 
-    def forward(self, emb, y=None):
+    def forward(self, emb, y=None, inference=False):
         # emb: [B, T, C]
         # y: [B, T]
-        with torch.no_grad():
-            last_step_logprobs = self._get_full_logprobs(emb[:, -1, :])  # [B, vocab_size]
+        if inference:
+            with torch.no_grad():
+                last_step_probs = self._get_full_probs(emb[:, -1, :])  # [B, vocab_size]
+        else:
+            last_step_probs = None
 
-        loss = self._get_loss(emb, y) if y is not None else None
-        return last_step_logprobs, loss
+        loss = self._compute_loss(emb, y) if y is not None else None
+        return last_step_probs, loss

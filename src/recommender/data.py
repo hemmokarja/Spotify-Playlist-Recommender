@@ -54,6 +54,10 @@ class Tensoriser:
         return collated
 
     @property
+    def vocab_size(self):
+        return self.tracks.shape[0]
+
+    @property
     def artist_vocab_size(self):
         return int(self.tracks.artist_index.nunique())
 
