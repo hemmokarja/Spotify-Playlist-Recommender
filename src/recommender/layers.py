@@ -32,6 +32,7 @@ class PlaylistNameEmbedder(nn.Module):
     def forward(self, names: list[str]) -> torch.Tensor:
         with torch.no_grad():
             e_name = self.model.encode(names, convert_to_tensor=True)  # [B, d_name]
+        e_name = e_name.clone().detach()
         return self.proj(e_name)  # [B, d_model]
 
     @classmethod
