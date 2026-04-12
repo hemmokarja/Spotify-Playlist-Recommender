@@ -1,3 +1,10 @@
+TENSORISER:
+* Add seq_lens
+
+PlaylistRecommenderInference
+* Add seq_lens to last_step_probs as input -> take the last valid embedding -> pass to head (needed during evaluation when batching is used)
+
+
 * Add artist dropout into TrackEmbedder to allow simulating inference where artist is not always present
 * Remove LayerNorm from TrackEmbedder output - previously that hasn't worked well
 
@@ -9,6 +16,3 @@ Head
 Masking test-only items during training
 * they're never in loss if we ensure that in sampler (only sample train tracks)
 * add ability to mask them out with allowed_mask (need logprobs)
-
-Make inference class
-* now, the prediction is always made from the last step so there's no need for "obtaining the actual last embedding" (unless batching is used)
