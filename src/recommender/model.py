@@ -106,3 +106,37 @@ class PlaylistRecommender(nn.Module):
             return sum(p.numel() for p in self.parameters() if p.requires_grad)
         else:
             return sum(p.numel() for p in self.parameters())
+
+    def get_device(self):
+        self.track_embedder.artist_emb.weight.device
+
+
+def _handle_batching(x, device):
+    return x.unsqueeze(0).to(device) if isinstance(x, torch.Tensor) else [x]
+
+
+class PlaylistRecommenderInference:
+    def __init__(self, model: PlaylistRecommender):
+        self.model = model
+        self.tensoriser = model.tensoriser
+
+    def last_step_probs(
+        self, name: list[str], x: torch.Tensor, allowed_mask: torch.Tensor | None = None
+    ):
+        e = self.model.propagate_hidden(name, x)
+        probs = self.model.head.full_probs(e[:, -1, :], allowed_mask)
+        return probs
+
+    def get_recommendations(self, playlist_name: str, playlist: list[int]):
+        was_training = self.model.training
+        self.model.eval()
+        device = self.model.get_device()
+        sample = self.tensoriser.tensorise(playlist_name, playlist)
+        batch = {
+            k: _handle_batching(v, device) for k, v in sample.items()
+        }
+        probs = self.last_step_probs(**batch)
+        # TODO finnish
+
+        self.model.training(was_training)
+        return None
