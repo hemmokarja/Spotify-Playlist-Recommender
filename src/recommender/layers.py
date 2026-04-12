@@ -106,3 +106,107 @@ class TrackEmbedder(nn.Module):
 
         e = torch.cat([e_artist, e_cont, e_cat], dim=-1)  # [B, T, d_concat]
         return self.ln(self.proj(self.dropout(e)))  # [B, T, d_model]
+
+
+class CausalSelfAttentionWithROPE(nn.Module):
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        assert config.d_model % config.n_head == 0
+        assert (config.d_model // config.n_head) % 2 == 0, "RoPE requires even head size"
+        self.c_attn = nn.Linear(config.d_model, 3 * config.d_model, bias=config.bias)
+        self.c_proj = nn.Linear(config.d_model, config.d_model, bias=config.bias)
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.head_size = config.d_model // config.n_head
+        self.d_model = config.d_model
+        self.dropout = config.dropout
+
+        self.rope_base = config.rope_base
+        self.rope_dim = self.head_size // 2
+        dim_indices = torch.arange(0, self.rope_dim).float()
+        theta = 1.0 / (self.rope_base ** (2 * dim_indices / self.head_size))
+        self.register_buffer("theta", theta)
+
+    @staticmethod
+    def _apply_rope(x, cos, sin):
+        # x: [B, nh, T, hs]
+        # cos: [1, 1, T, d]
+        # sin: [1, 1, T, d]
+        x_ = x.reshape(*x.shape[:-1], -1, 2)  # [B, nh, T, d, 2] (split head size into two)
+        x0 = x_[..., 0]
+        x1 = x_[..., 1]
+        x0_rot = x0 * cos - x1 * sin
+        x1_rot = x0 * sin + x1 * cos
+        x_rot = torch.stack([x0_rot, x1_rot], dim=-1).flatten(start_dim=-2)
+        return x_rot
+
+    def forward(self, x):
+        B, T, C = x.size()
+        q, k, v = self.c_attn(x).split(self.d_model, dim=2)
+        k = k.view(B, T, self.n_head, self.head_size).transpose(1, 2)  # [B, nh, T, hs]
+        q = q.view(B, T, self.n_head, self.head_size).transpose(1, 2)  # [B, nh, T, hs]
+        v = v.view(B, T, self.n_head, self.head_size).transpose(1, 2)  # [B, nh, T, hs]
+
+        theta = self.theta.to(x.dtype)
+        t = torch.arange(T, device=x.device, dtype=x.dtype)
+        freqs = torch.outer(t, theta)  # [T, d]
+        freqs_cos = torch.cos(freqs).unsqueeze(0).unsqueeze(0)  # [1, 1, T, d]
+        freqs_sin = torch.sin(freqs).unsqueeze(0).unsqueeze(0)  # [1, 1, T, d]
+
+        q = self._apply_rope(q, freqs_cos, freqs_sin)  # [B, nh, T, hs]
+        k = self._apply_rope(k, freqs_cos, freqs_sin)  # [B, nh, T, hs]
+
+        y = torch.nn.functional.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            dropout_p=self.dropout if self.training else 0,
+            is_causal=True,
+        )  # [B, nh, T, hs]
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = self.resid_dropout(self.c_proj(y))
+        return y
+
+
+class MLP(nn.Module):
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        self.c_fc = nn.Linear(config.d_model, 4 * config.d_model, bias=config.bias)
+        self.gelu = nn.GELU()
+        self.c_proj = nn.Linear(4 * config.d_model, config.d_model, bias=config.bias)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        self.ln_1 = nn.LayerNorm(config.d_model, bias=config.bias)
+        self.attn = CausalSelfAttentionWithROPE(config)
+        self.ln_2 = nn.LayerNorm(config.d_model, bias=config.bias)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
+
+
+class TransformerBlockStack(nn.Module):
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        self.blocks = nn.ModuleList(
+            [TransformerBlock(config) for _ in range(config.n_layer)]
+        )
+    
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        return x
