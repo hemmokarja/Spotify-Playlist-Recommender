@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from recommender.data import Tensoriser
+from recommender.head import SampledSoftmaxPredictionHead
 from recommender.layers import (
     PlaylistNameEmbedder, TrackEmbedder, TransformerBlockStack
 )
@@ -44,6 +45,7 @@ class PlaylistRecommender(nn.Module):
         x_cont: torch.Tensor,  # [B, T-1, n_cont]
         x_cat: torch.Tensor,  # [B, T-1, n_cat]
         y: torch.Tensor | None = None,  # [B, T]
+        inference: bool = False
     ):
         e_name = self.name_embedder(name)  # [B, C]
         e_track = self.track_embedder(x_artist, x_cont, x_cat)  # [B, T-1, C]

@@ -94,13 +94,10 @@ class TrackEmbedder(nn.Module):
         self.ln = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(
-        self,
-        x_artist: torch.Tensor,  # [B, T]
-        x_cont: torch.Tensor,  # [B, T, n_cont]
-        x_cat: torch.Tensor,  # [B, T, n_cat]
-    ) -> torch.Tensor:  # [B, T, d_model]
-
+    def forward(self, x_artist, x_cont, x_cat):
+        # x_artist: [B, T]
+        # x_cont: [B, T, n_cont]
+        # x_cat: [B, T, n_cat]
         e_artist = self.artist_emb(x_artist)  # [B, T, d_artist]
         e_cont = self.cont_mlp(x_cont)  # [B, T, d_cont]
 
@@ -145,6 +142,7 @@ class CausalSelfAttentionWithROPE(nn.Module):
         return x_rot
 
     def forward(self, x):
+        # x: [B, T, C]
         B, T, C = x.size()
         q, k, v = self.c_attn(x).split(self.d_model, dim=2)
         k = k.view(B, T, self.n_head, self.head_size).transpose(1, 2)  # [B, nh, T, hs]
@@ -181,6 +179,7 @@ class MLP(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
+        # x: [B, T, C]
         x = self.c_fc(x)
         x = self.gelu(x)
         x = self.c_proj(x)
@@ -197,6 +196,7 @@ class TransformerBlock(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
+        # x: [B, T, C]
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
@@ -210,6 +210,7 @@ class TransformerBlockStack(nn.Module):
         )
     
     def forward(self, x):
+        # x: [B, T, C]
         for block in self.blocks:
             x = block(x)
         return x
