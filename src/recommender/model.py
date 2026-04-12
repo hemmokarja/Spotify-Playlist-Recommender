@@ -123,8 +123,13 @@ class PlaylistRecommenderInference:
     def last_step_probs(
         self, name: list[str], x: torch.Tensor, allowed_mask: torch.Tensor | None = None
     ):
+        was_training = self.model.training
+        self.model.eval()
+
         e = self.model.propagate_hidden(name, x)
         probs = self.model.head.full_probs(e[:, -1, :], allowed_mask)
+
+        self.model.training(was_training)
         return probs
 
     def get_recommendations(
@@ -132,8 +137,6 @@ class PlaylistRecommenderInference:
         playlist: list[int],
         allowed_mask: torch.Tensor | None = None,
     ):
-        was_training = self.model.training
-        self.model.eval()
         device = self.model.get_device()
         sample = self.tensoriser.tensorise(playlist_name, playlist)
         batch = {
@@ -142,5 +145,4 @@ class PlaylistRecommenderInference:
         probs = self.last_step_probs(**batch, allowed_mask=allowed_mask)
         # TODO finnish
 
-        self.model.training(was_training)
         return None
