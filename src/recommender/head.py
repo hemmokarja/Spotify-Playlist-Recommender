@@ -1,4 +1,4 @@
-import collections
+from collections import namedtuple
 
 import pandas as pd
 import structlog
@@ -11,7 +11,7 @@ from recommender.layers import TrackEmbedder
 logger = structlog.get_logger(__name__)
 
 
-_SamplerOutput = collections.namedtuple(
+_SamplerOutput = namedtuple(
     "SamplerOutput", ["sampled_indices", "true_probs", "sample_probs"]
 )
 
