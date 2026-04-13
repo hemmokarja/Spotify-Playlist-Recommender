@@ -29,7 +29,11 @@ class Tensoriser:
     def tensorise(
         self, playlist_name: str, playlist: np.ndarray, inference: bool = False
     ) -> dict:
+        if not isinstance(playlist, np.ndarray):
+            playlist = np.asarray(playlist)
+
         x = playlist[:-1] if not inference else playlist
+
         sample = {
             "name": playlist_name,
             "x": torch.from_numpy(x).to(torch.long),

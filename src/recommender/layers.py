@@ -144,7 +144,17 @@ class TrackEmbedder(nn.Module):
         )
 
     def forward(self, x):
-        # x: [B, T]
+        # x: [B] or [B, T] — T may be 0 for empty playlists
+        is_1d = x.dim() == 1
+        if is_1d:
+            x = x.unsqueeze(1)  # [B, 1]
+
+        if x.shape[1] == 0:
+            B = x.shape[0]
+            return torch.zeros(
+                B, 0, self.config.d_model, device=x.device, dtype=self.proj.weight.dtype
+            )
+
         x_cont = self.cont_feat_mapping[x]  # [B, T, n_cont]
         x_cat = self.cat_feat_mapping[x]  # [B, T, n_cat]
         x_artist = self.artist_mapping[x]  # [B, T]
@@ -158,7 +168,12 @@ class TrackEmbedder(nn.Module):
         e_cat = torch.cat(e_cats, dim=-1)  # [B, T, d_cat]
 
         e = torch.cat([e_artist, e_cont, e_cat], dim=-1)  # [B, T, d_concat]
-        return self.ln(self.proj(self.dropout(e)))  # [B, T, d_model]
+        e = self.ln(self.proj(self.dropout(e)))  # [B, T, d_model]
+        
+        if is_1d:
+            e = e.squeeze(1)  # [B, d_model]
+
+        return e
 
 
 class CausalSelfAttentionWithROPE(nn.Module):
