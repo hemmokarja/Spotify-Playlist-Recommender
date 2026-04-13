@@ -12,7 +12,7 @@ class ModelConfig:
     artist_dropout: float = 0.0
     bias: bool = True
     rope_base: float = 10_000.0
-    n_neg_samples: int = 1000,
-    smoothing_factor: float = 1.0,
-    uniform_mix_factor: float | None = None,
-    loss_temperature: float = 1.0,
+    n_neg_samples: int = 1000
+    smoothing_factor: float = 1.0
+    uniform_mix_factor: float | None = None
+    loss_temperature: float = 1.0
