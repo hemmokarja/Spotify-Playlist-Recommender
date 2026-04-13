@@ -30,7 +30,11 @@ class Tensoriser:
         self, playlist_name: str, playlist: np.ndarray, inference: bool = False
     ) -> dict:
         x = playlist[:-1] if not inference else playlist
-        sample = {"name": playlist_name, "x": torch.from_numpy(x).to(torch.long)}
+        sample = {
+            "name": playlist_name,
+            "x": torch.from_numpy(x).to(torch.long),
+            "seq_len": torch.tensor(len(x))
+        }
         if not inference:
             sample["y"] = torch.from_numpy(playlist).to(torch.long)
         return sample
@@ -44,6 +48,7 @@ class Tensoriser:
             "x": torch.stack(
                 [F.pad(s["x"], (0, pad)) for s, pad in zip(batch, x_pads)]
             ),
+            "seq_len": torch.tensor([s["seq_len"] for s in batch])
         }
         if "y" in batch[0]:
             max_y_len = max(s["y"].shape[0] for s in batch)

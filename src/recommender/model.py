@@ -54,7 +54,14 @@ class PlaylistRecommender(nn.Module):
         e = self.block_stack(e)  # [B, T, C]
         return e
 
-    def forward(self, name: list[str], x: torch.Tensor, y: torch.Tensor | None = None):
+    def forward(
+        self,
+        name: list[str],
+        x: torch.Tensor,
+        y: torch.Tensor | None = None,
+        *args,
+        **kwargs,
+    ):
         # name: [B]
         # x: [B, T-1]
         # y: [B, T] (optional)
@@ -121,24 +128,40 @@ class PlaylistRecommenderInference:
         self.tensoriser = model.tensoriser
 
     def last_step_probs(
-        self, name: list[str], x: torch.Tensor, allowed_mask: torch.Tensor | None = None
+        self,
+        name: list[str],
+        x: torch.Tensor,
+        seq_len: torch.Tensor,
+        allowed_mask: torch.Tensor | None = None
     ):
+        # name: [B]
+        # x: [B, T]
+        # seq_len: [B]
+        # allowed_mask: [vocab_size]
         was_training = self.model.training
         self.model.eval()
 
-        e = self.model.propagate_hidden(name, x)
-        probs = self.model.head.full_probs(e[:, -1, :], allowed_mask)
+        e = self.model.propagate_hidden(name, x, seq_len)  # [B, T, C]
+
+        # last valid embedding is at index seq_len (and not seq_len - 1) because all
+        # sequences are prepended the playlist name token
+        batch_idx = torch.arange(e.shape[0], device=e.device)
+        e_last = e[batch_idx, seq_len]
+
+        probs = self.model.head.full_probs(e_last, allowed_mask)
 
         self.model.training(was_training)
         return probs
 
     def get_recommendations(
-        self, playlist_name: str,
+        self,
+        playlist_name: str,
         playlist: list[int],
         allowed_mask: torch.Tensor | None = None,
     ):
+        # allowed_mask: [vocab_size]
         device = self.model.get_device()
-        sample = self.tensoriser.tensorise(playlist_name, playlist)
+        sample = self.tensoriser.tensorise(playlist_name, playlist, inference=True)
         batch = {
             k: _handle_batching(v, device) for k, v in sample.items()
         }
