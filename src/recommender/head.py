@@ -118,7 +118,10 @@ class SampledSoftmaxPredictionHead(nn.Module):
         y = y.view(-1)  # [B']
 
         # exclude padding and non-train items from loss
-        mask = (y != 0) & self.train_mask[y]
+        mask = y != 0
+        if self.train_mask is not None:
+            mask &= self.train_mask[y]
+
         hidden = hidden[mask]
         y = y[mask]
 
