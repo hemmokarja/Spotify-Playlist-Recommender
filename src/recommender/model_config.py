@@ -9,6 +9,7 @@ class ModelConfig:
     d_cont: int | None = None
     n_head: int = 8
     dropout: float = 0.0
+    artist_dropout: float = 0.0
     bias: bool = True
     rope_base: float = 10_000.0
     loss_kwargs: dict | None = None
