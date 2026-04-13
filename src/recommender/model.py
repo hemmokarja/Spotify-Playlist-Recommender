@@ -55,7 +55,7 @@ class PlaylistRecommender(nn.Module):
         self.track_embedder = track_embedder
         self.block_stack = block_stack
 
-        self.train_mask = tensoriser.get_train_mask()
+        self.train_mask = tensoriser.get_train_mask(include_pad=True)
 
         sampling_probs = _make_popularity_sampling_distribution(
             self.tensoriser.tracks,
