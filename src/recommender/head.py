@@ -110,7 +110,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def full_probs(self, hidden, allowed_mask=None):
+    def full_probs(self, hidden, allowed_mask: torch.Tensor | None = None):
         # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=hidden.device)
