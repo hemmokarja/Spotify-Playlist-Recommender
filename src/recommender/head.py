@@ -1,19 +1,24 @@
 import collections
 
+import pandas as pd
 import structlog
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from recommender.layers import TrackEmbedder
+
 logger = structlog.get_logger(__name__)
 
 
 @torch.no_grad()
-def _build_popularity_sampling_distribution(
-    item_mapping, smoothing_factor=1.0, uniform_mix_factor=None
+def _make_popularity_sampling_distribution(
+    tracks: pd.DataFrame,
+    smoothing_factor: float = 1.0,
+    uniform_mix_factor: float | None = None,
+    mask: torch.Tensor | None = None
 ):
-    item_counts = item_mapping.groupby("item_index").num_obs_token.sum()
-    probs = torch.from_numpy(item_counts.to_numpy(dtype="float32"))  # [vocab_size]
+    probs = torch.from_numpy(tracks.n_obs.to_numpy())  # [vocab_size]
     probs = (probs + 1e-10) ** smoothing_factor  # [vocab_size]
     probs /= probs.sum()  # [vocab_size]
 
@@ -23,6 +28,9 @@ def _build_popularity_sampling_distribution(
             1.0 - uniform_mix_factor
         ) * probs + uniform_mix_factor * uniform_probs  # [vocab_size]
 
+    if mask is not None:
+        probs *= mask
+
     return probs  # [vocab_size]
 
 
@@ -31,22 +39,16 @@ _SamplerOutput = collections.namedtuple(
 )
 
 
-class PopularitySampler(nn.Module):
+class Sampler(nn.Module):
     def __init__(
         self,
-        item_mapping,
+        sampling_probs: torch.Tensor,
         n_samples: int,
-        smoothing_factor: float = 1.0,
-        uniform_mix_factor: float | None = None,
         replacement: bool = False,
     ):
         super().__init__()
         self.n_samples = n_samples
         self.replacement = replacement
-
-        sampling_probs = _build_popularity_sampling_distribution(
-            item_mapping, smoothing_factor, uniform_mix_factor
-        )  # [vocab_size]
         self.register_buffer("sampling_probs", sampling_probs)  # [vocab_size]
 
     def forward(self, y) -> _SamplerOutput:
@@ -84,16 +86,30 @@ class SampledSoftmaxLoss(nn.Module):
 class SampledSoftmaxPredictionHead(nn.Module):
     def __init__(
         self,
-        track_embedder,
-        vocab_size,
-        loss_kwargs=None,
-        sampler_kwargs=None,
+        tracks: pd.DataFrame,
+        track_embedder: TrackEmbedder,
+        vocab_size: int,
+        n_neg_samples: int,
+        smoothing_factor: float = 1.0,
+        uniform_mix_factor: float | None = None,
+        temperature: float = 1.0,
+        train_mask: torch.Tensor = None,
     ):
         super().__init__()
         self.track_embedder = track_embedder
         self.vocab_size = vocab_size
-        self.sampler = PopularitySampler(**sampler_kwargs)
-        self.loss_fn = SampledSoftmaxLoss(**loss_kwargs)
+
+        if train_mask is not None:
+            self.register_buffer("train_mask", train_mask)
+        else:
+            self.train_mask = None
+
+        sampling_probs = _make_popularity_sampling_distribution(
+            tracks, smoothing_factor, uniform_mix_factor, train_mask
+        )
+
+        self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
+        self.loss_fn = SampledSoftmaxLoss(temperature)
 
     def loss(self, hidden, y):
         # hidden: [B, T, C]
@@ -101,7 +117,8 @@ class SampledSoftmaxPredictionHead(nn.Module):
         hidden = hidden.view(-1, hidden.size(-1))  # [B', C]
         y = y.view(-1)  # [B']
 
-        mask = y != 0
+        # exclude padding and non-train items from loss
+        mask = (y != 0) & self.train_mask[y]
         hidden = hidden[mask]
         y = y[mask]
 

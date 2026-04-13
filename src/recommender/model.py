@@ -33,10 +33,14 @@ class PlaylistRecommender(nn.Module):
         self.block_stack = block_stack
 
         self.head = SampledSoftmaxPredictionHead(
-            self.track_embedder,
-            tensoriser.vocab_size,
-            config.loss_kwargs,
-            config.sampler_kwargs,
+            tracks=self.tensoriser.tracks,
+            track_embedder=self.track_embedder,
+            vocab_size=tensoriser.vocab_size,
+            n_neg_samples=config.n_neg_samples,
+            smoothing_factor=config.smoothing_factor,
+            uniform_mix_factor=config.uniform_mix_factor,
+            temperature=config.loss_temperature,
+            train_mask=tensoriser.get_train_mask(),
         )
 
         logger.info(

@@ -70,6 +70,9 @@ class Tensoriser:
     def cat_vocab_sizes(self):
         return [int(self.tracks[f].nunique()) for f in self.CAT_FEATURES]
 
+    def get_train_mask(self):
+        return torch.from_numpy((self.tracks.n_obs > 0).to_numpy())
+
     def as_dict(self):
         return self.tracks.to_dict("records")
 
