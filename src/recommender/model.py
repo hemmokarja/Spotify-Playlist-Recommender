@@ -15,6 +15,29 @@ from recommender.model_config import ModelConfig
 logger = structlog.get_logger(__name__)
 
 
+@torch.no_grad()
+def _make_popularity_sampling_distribution(
+    tracks: pd.DataFrame,
+    smoothing_factor: float = 1.0,
+    uniform_mix_factor: float | None = None,
+    mask: torch.Tensor | None = None
+):
+    probs = torch.from_numpy(tracks.n_obs.to_numpy())  # [vocab_size]
+    probs = (probs + 1e-10) ** smoothing_factor  # [vocab_size]
+    probs /= probs.sum()  # [vocab_size]
+
+    if uniform_mix_factor is not None:
+        uniform_probs = torch.ones(len(probs)) / len(probs)  # [vocab_size]
+        probs = (
+            1.0 - uniform_mix_factor
+        ) * probs + uniform_mix_factor * uniform_probs  # [vocab_size]
+
+    if mask is not None:
+        probs *= mask
+
+    return probs  # [vocab_size]
+
+
 class PlaylistRecommender(nn.Module):
     def __init__(
         self,
@@ -32,15 +55,20 @@ class PlaylistRecommender(nn.Module):
         self.track_embedder = track_embedder
         self.block_stack = block_stack
 
+        self.train_mask = tensoriser.get_train_mask()
+
+        sampling_probs = _make_popularity_sampling_distribution(
+            self.tensoriser.tracks,
+            config.smoothing_factor,
+            config.uniform_mix_factor,
+            self.train_mask
+        )
+
         self.head = SampledSoftmaxPredictionHead(
-            tracks=self.tensoriser.tracks,
             track_embedder=self.track_embedder,
-            vocab_size=tensoriser.vocab_size,
+            sampling_probs=sampling_probs,
             n_neg_samples=config.n_neg_samples,
-            smoothing_factor=config.smoothing_factor,
-            uniform_mix_factor=config.uniform_mix_factor,
             temperature=config.loss_temperature,
-            train_mask=tensoriser.get_train_mask(),
         )
 
         logger.info(
@@ -70,7 +98,7 @@ class PlaylistRecommender(nn.Module):
         # x: [B, T-1]
         # y: [B, T] (optional)
         e = self.propagate_hidden(name, x)
-        loss = self.head.loss(e, y)
+        loss = self.head.loss(e, y, self.train_mask)
         return loss
 
     @classmethod

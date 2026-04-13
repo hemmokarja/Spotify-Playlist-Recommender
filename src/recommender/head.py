@@ -11,29 +11,6 @@ from recommender.layers import TrackEmbedder
 logger = structlog.get_logger(__name__)
 
 
-@torch.no_grad()
-def _make_popularity_sampling_distribution(
-    tracks: pd.DataFrame,
-    smoothing_factor: float = 1.0,
-    uniform_mix_factor: float | None = None,
-    mask: torch.Tensor | None = None
-):
-    probs = torch.from_numpy(tracks.n_obs.to_numpy())  # [vocab_size]
-    probs = (probs + 1e-10) ** smoothing_factor  # [vocab_size]
-    probs /= probs.sum()  # [vocab_size]
-
-    if uniform_mix_factor is not None:
-        uniform_probs = torch.ones(len(probs)) / len(probs)  # [vocab_size]
-        probs = (
-            1.0 - uniform_mix_factor
-        ) * probs + uniform_mix_factor * uniform_probs  # [vocab_size]
-
-    if mask is not None:
-        probs *= mask
-
-    return probs  # [vocab_size]
-
-
 _SamplerOutput = collections.namedtuple(
     "SamplerOutput", ["sampled_indices", "true_probs", "sample_probs"]
 )
@@ -86,41 +63,29 @@ class SampledSoftmaxLoss(nn.Module):
 class SampledSoftmaxPredictionHead(nn.Module):
     def __init__(
         self,
-        tracks: pd.DataFrame,
         track_embedder: TrackEmbedder,
-        vocab_size: int,
+        sampling_probs: torch.Tensor,
         n_neg_samples: int,
-        smoothing_factor: float = 1.0,
-        uniform_mix_factor: float | None = None,
         temperature: float = 1.0,
-        train_mask: torch.Tensor = None,
     ):
         super().__init__()
         self.track_embedder = track_embedder
-        self.vocab_size = vocab_size
-
-        if train_mask is not None:
-            self.register_buffer("train_mask", train_mask)
-        else:
-            self.train_mask = None
-
-        sampling_probs = _make_popularity_sampling_distribution(
-            tracks, smoothing_factor, uniform_mix_factor, train_mask
-        )
+        self.vocab_size = len(sampling_probs)
 
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
         self.loss_fn = SampledSoftmaxLoss(temperature)
 
-    def loss(self, hidden, y):
+    def loss(self, hidden, y, loss_mask: torch.Tensor | None = None):
         # hidden: [B, T, C]
         # y: [B, T]
+        # extra_mask: [vocab_size]
         hidden = hidden.view(-1, hidden.size(-1))  # [B', C]
         y = y.view(-1)  # [B']
 
         # exclude padding and non-train items from loss
         mask = y != 0
-        if self.train_mask is not None:
-            mask &= self.train_mask[y]
+        if loss_mask is not None:
+            mask &= loss_mask[y]
 
         hidden = hidden[mask]
         y = y[mask]
