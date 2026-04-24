@@ -1,3 +1,4 @@
+import inspect
 from dataclasses import asdict, dataclass
 
 import pandas as pd
@@ -156,6 +157,9 @@ class PlaylistRecommender(nn.Module):
     def get_device(self):
         self.track_embedder.artist_emb.weight.device
 
+    def to_inference_model(self) -> "PlaylistRecommenderInference":
+        return PlaylistRecommenderInference(self.model)
+
 
 def _handle_batching(x, device):
     return x.unsqueeze(0).to(device) if isinstance(x, torch.Tensor) else [x]
@@ -166,6 +170,7 @@ class PlaylistRecommenderInference:
         self.model = model
         self.tensoriser = model.tensoriser
 
+    @torch.inference_mode()
     def last_step_probs(
         self,
         name: list[str],
