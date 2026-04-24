@@ -28,7 +28,7 @@ class Tensoriser:
         self.track_id_to_name = dict(zip(tracks.track_id, tracks.track_name))
         self.track_id_to_artist = dict(zip(tracks.track_id, tracks.artist_name))
 
-    def tensorise(
+    def _tensorise(
         self, playlist_name: str, playlist: np.ndarray, inference: bool = False
     ) -> dict:
         if not isinstance(playlist, np.ndarray):
@@ -45,22 +45,22 @@ class Tensoriser:
             sample["y"] = torch.from_numpy(playlist).to(torch.long)
         return sample
 
-    @staticmethod
-    def collate_fn(batch: list[dict]) -> dict:
-        max_x_len = max(s["x"].shape[0] for s in batch)
-        x_pads = [max_x_len - s["x"].shape[0] for s in batch]
+    def collate_fn(self, batch: list[dict]) -> dict:
+        samples = [self._tensorise(s["name"], s["playlist"]) for s in batch]
+        max_x_len = max(s["x"].shape[0] for s in samples)
+        x_pads = [max_x_len - s["x"].shape[0] for s in samples]
         collated = {
-            "name": [s["name"] for s in batch],
+            "name": [s["name"] for s in samples],
             "x": torch.stack(
-                [F.pad(s["x"], (0, pad)) for s, pad in zip(batch, x_pads)]
+                [F.pad(s["x"], (0, pad)) for s, pad in zip(samples, x_pads)]
             ),
-            "seq_len": torch.tensor([s["seq_len"] for s in batch])
+            "seq_len": torch.tensor([s["seq_len"] for s in samples])
         }
-        if "y" in batch[0]:
-            max_y_len = max(s["y"].shape[0] for s in batch)
-            y_pads = [max_y_len - s["y"].shape[0] for s in batch]
+        if "y" in samples[0]:
+            max_y_len = max(s["y"].shape[0] for s in samples)
+            y_pads = [max_y_len - s["y"].shape[0] for s in samples]
             collated["y"] = torch.stack(
-                [F.pad(s["y"], (0, pad)) for s, pad in zip(batch, y_pads)]
+                [F.pad(s["y"], (0, pad)) for s, pad in zip(samples, y_pads)]
             )
         return collated
 
@@ -92,14 +92,12 @@ class Tensoriser:
 
 
 class PlaylistDataset(Dataset):
-    def __init__(self, split, tensoriser: Tensoriser):
+    def __init__(self, split: str):
         self.df = pd.read_parquet(f"data/data/{split}.parquet")
-        self.tensoriser = tensoriser
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, idx: int) -> dict:
         row = self.df.iloc[idx]
-        sample = self.tensoriser.tensorise(row.playlist_name, row.playlist)
-        return sample
+        return {"name": row.playlist_name, "playlist": row.playlist}

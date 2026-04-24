@@ -53,8 +53,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def initialize_trainer_from_scratch():
     config = ModelConfig(n_layer=3, d_model=128, d_name=768)
     model = PlaylistRecommender.from_config(config)
-    train_dataset = PlaylistDataset("train", model.tensoriser)
-    validation_dataset = PlaylistDataset("test", model.tensoriser)
+    train_dataset = PlaylistDataset("train")
+    validation_dataset = PlaylistDataset("test")
     trainer =  Trainer(
         TRAINER_CONFIG,
         model,
@@ -68,9 +68,8 @@ def initialize_trainer_from_scratch():
 def initalize_trainer_from_checkpoint():
     logger.info("Continuing SFT run from a checkpoint")
 
-    tensoriser = PlaylistRecommender.tensoriser_from_checkpoint(CHECKPOINT_PATH)
-    train_dataset = PlaylistDataset("train", tensoriser)
-    validation_dataset = PlaylistDataset("test", tensoriser)
+    train_dataset = PlaylistDataset("train")
+    validation_dataset = PlaylistDataset("test")
 
     trainer = Trainer.from_checkpoint(
         CHECKPOINT_PATH,
