@@ -133,9 +133,22 @@ class PlaylistRecommender(nn.Module):
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "PlaylistRecommender":
+    def tensoriser_from_checkpoint(cls, checkpoint_filepath: str) -> Tensoriser:
+        """
+        Load only the Tensoriser from a checkpoint, without building the full model.
+        """
+        checkpoint = torch.load(
+            checkpoint_filepath, map_location="cpu", weights_only=False
+        )
+        return Tensoriser.from_dict(checkpoint["model"]["tensoriser"])
+
+    @classmethod
+    def from_dict(
+        cls, d: dict, tensoriser: Tensoriser | None = None
+    ) -> "PlaylistRecommender":
         config = ModelConfig(**d["config"])
-        tensoriser = Tensoriser.from_dict(d["tensoriser"])
+        if tensoriser is None:
+            tensoriser = Tensoriser.from_dict(d["tensoriser"])
 
         name_embedder = PlaylistNameEmbedder.from_config(config)
         track_embedder = TrackEmbedder.from_config_and_tensoriser(config, tensoriser)

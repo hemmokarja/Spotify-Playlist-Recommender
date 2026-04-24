@@ -382,7 +382,9 @@ class Trainer:
         checkpoint = torch.load(
             checkpoint_filepath, map_location=device, weights_only=False
         )
-        model = PlaylistRecommender.from_dict(checkpoint["model"])
+        model = PlaylistRecommender.from_dict(
+            checkpoint["model"], tensoriser=train_dataset.tensoriser
+        )
         config = TrainerConfig(**checkpoint["trainer_config"])
 
         trainer = cls(config, model, train_dataset, validation_dataset, device)
