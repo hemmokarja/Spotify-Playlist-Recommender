@@ -149,7 +149,7 @@ class Trainer:
         model: PlaylistRecommender,
         train_dataset: PlaylistDataset,
         validation_dataset: PlaylistDataset,
-        device: torch.device | str
+        device: torch.device
     ):
         self.config = config
         self.model = model.to(device)
@@ -377,7 +377,7 @@ class Trainer:
         checkpoint_filepath: str,
         train_dataset: PlaylistDataset,
         validation_dataset: PlaylistDataset,
-        device: torch.device | str,
+        device: torch.device,
     ) -> "Trainer":
         checkpoint = torch.load(
             checkpoint_filepath, map_location=device, weights_only=False
