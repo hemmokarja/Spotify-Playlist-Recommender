@@ -1,4 +1,4 @@
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 import pandas as pd
 import structlog
@@ -36,6 +36,13 @@ def _make_popularity_sampling_distribution(
         probs *= mask
 
     return probs  # [vocab_size]
+
+
+@dataclass
+class Recommendation:
+    prob: float
+    track: str
+    artist: str
 
 
 class PlaylistRecommender(nn.Module):
@@ -173,7 +180,7 @@ class PlaylistRecommenderInference:
         was_training = self.model.training
         self.model.eval()
 
-        e = self.model.propagate_hidden(name, x, seq_len)  # [B, T, C]
+        e = self.model.propagate_hidden(name, x)  # [B, T, C]
 
         # last valid embedding is at index seq_len (and not seq_len - 1) because all
         # sequences are prepended the playlist name token
@@ -182,13 +189,28 @@ class PlaylistRecommenderInference:
 
         probs = self.model.head.full_probs(e_last, allowed_mask)
 
-        self.model.training(was_training)
+        self.model.train(was_training)
         return probs
+
+    def _probs_to_recs(self, probs: torch.Tensor, top_k: int) -> list[Recommendation]:
+        # probs: [n_tracks]
+        top_values, top_indices = torch.topk(probs, k=top_k)
+        recs = []
+        for val, ix in zip(top_values.tolist(), top_indices.tolist()):
+            recs.append(
+                Recommendation(
+                    prob=val,
+                    track=self.tensoriser.track_id_to_name[ix],
+                    artist=self.tensoriser.track_id_to_artist[ix]
+                )
+            )
+        return recs
 
     def get_recommendations(
         self,
         playlist_name: str,
         playlist: list[int],
+        top_k: int = 10,
         allowed_mask: torch.Tensor | None = None,
     ):
         # allowed_mask: [vocab_size]
@@ -198,6 +220,5 @@ class PlaylistRecommenderInference:
             k: _handle_batching(v, device) for k, v in sample.items()
         }
         probs = self.last_step_probs(**batch, allowed_mask=allowed_mask)
-        # TODO finnish
-
-        return None
+        probs = probs.squeeze(0)
+        return self._probs_to_recs(probs, top_k)

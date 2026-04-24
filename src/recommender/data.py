@@ -25,6 +25,8 @@ class Tensoriser:
 
     def __init__(self, tracks: pd.DataFrame):
         self.tracks = tracks.sort_values("track_id").reset_index(drop=True)
+        self.track_id_to_name = dict(zip(tracks.track_id, tracks.track_name))
+        self.track_id_to_artist = dict(zip(tracks.track_id, tracks.artist_name))
 
     def tensorise(
         self, playlist_name: str, playlist: np.ndarray, inference: bool = False
