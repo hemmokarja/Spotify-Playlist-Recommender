@@ -4,15 +4,15 @@ import datetime
 import logging
 import os
 import time
-from dataclasses import dataclass, field, asdict
-from typing import Any, Tuple, Optional, List
+from dataclasses import dataclass, asdict
+from typing import Tuple, Optional
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 from recommender.data import PlaylistDataset
-from recommender.model import PlaylistRecommender, PlaylistRecommenderInference
+from recommender.model import PlaylistRecommender
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,22 @@ def _configure_optimizer(
 
     optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
     return optimizer, params
+
+
+def _compute_batch_metrics(
+    probs: torch.Tensor,  # [B, vocab_size]
+    y_last: torch.Tensor,  # [B]
+    k: int = 10,
+) -> dict[str, float]:
+    top_k_indices = torch.topk(probs, k=k, dim=-1).indices  # [B, k]
+    hits = (top_k_indices == y_last.unsqueeze(-1)).any(dim=-1).float()  # [B]
+    return {"hit_rate": hits.mean().item()}
+
+
+def _aggregate_metrics(all_batch_metrics: list[dict[str, float]]) -> dict[str, float]:
+    avg_loss = float(np.mean([m["loss"] for m in all_batch_metrics]))
+    avg_hit_rate = float(np.mean([m["hit_rate"] for m in all_batch_metrics]))
+    return {"loss": avg_loss, "hit_rate": avg_hit_rate}
 
 
 def _to_hms(took: float) -> tuple[int, int, int]:
@@ -383,19 +399,3 @@ class Trainer:
             f"(samples seen: {trainer.samples_seen:,})"
         )
         return trainer
-
-
-def _compute_batch_metrics(
-    probs: torch.Tensor,  # [B, vocab_size]
-    y_last: torch.Tensor,  # [B]
-    k: int = 10,
-) -> dict[str, float]:
-    top_k_indices = torch.topk(probs, k=k, dim=-1).indices  # [B, k]
-    hits = (top_k_indices == y_last.unsqueeze(-1)).any(dim=-1).float()  # [B]
-    return {"hit_rate": hits.mean().item()}
-
-
-def _aggregate_metrics(all_batch_metrics: list[dict[str, float]]) -> dict[str, float]:
-    avg_loss = float(np.mean([m["loss"] for m in all_batch_metrics]))
-    avg_hit_rate = float(np.mean([m["hit_rate"] for m in all_batch_metrics]))
-    return {"loss": avg_loss, "hit_rate": avg_hit_rate}
