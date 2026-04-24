@@ -155,10 +155,22 @@ class PlaylistRecommender(nn.Module):
             return sum(p.numel() for p in self.parameters())
 
     def get_device(self):
-        self.track_embedder.artist_emb.weight.device
+        return self.track_embedder.artist_emb.weight.device
+
+    def last_step_probs(
+        self,
+        name: list[str],
+        x: torch.Tensor,
+        seq_len: torch.Tensor,
+        allowed_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        e = self.propagate_hidden(name, x)  # [B, T, C]
+        batch_idx = torch.arange(e.shape[0], device=e.device)
+        e_last = e[batch_idx, seq_len]  # [B, C]
+        return self.head.full_probs(e_last, allowed_mask)  # [B, vocab_size]
 
     def to_inference_model(self) -> "PlaylistRecommenderInference":
-        return PlaylistRecommenderInference(self.model)
+        return PlaylistRecommenderInference(self)
 
 
 def _handle_batching(x, device):
@@ -176,24 +188,15 @@ class PlaylistRecommenderInference:
         name: list[str],
         x: torch.Tensor,
         seq_len: torch.Tensor,
-        allowed_mask: torch.Tensor | None = None
-    ):
+        allowed_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         # name: [B]
         # x: [B, T]
         # seq_len: [B]
         # allowed_mask: [vocab_size]
         was_training = self.model.training
         self.model.eval()
-
-        e = self.model.propagate_hidden(name, x)  # [B, T, C]
-
-        # last valid embedding is at index seq_len (and not seq_len - 1) because all
-        # sequences are prepended the playlist name token
-        batch_idx = torch.arange(e.shape[0], device=e.device)
-        e_last = e[batch_idx, seq_len]
-
-        probs = self.model.head.full_probs(e_last, allowed_mask)
-
+        probs = self.model.last_step_probs(name, x, seq_len, allowed_mask)
         self.model.train(was_training)
         return probs
 
