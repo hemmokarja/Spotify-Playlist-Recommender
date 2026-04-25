@@ -25,14 +25,14 @@ MODEL_CONFIG = ModelConfig(
     artist_dropout=0.01,
     bias=True,
     rope_base=10_000.0,
-    n_neg_samples=5_000,
+    n_neg_samples=15_000,
     smoothing_factor=0.75,
     uniform_mix_factor=0.1,
     loss_temperature=1.0
 )
 TRAINER_CONFIG = TrainerConfig(
     batch_size=2048,
-    gradient_acc_steps=4,
+    gradient_acc_steps=8,
     log_interval=2048,
     compile=True,
     base_learning_rate=3e-4,
@@ -47,7 +47,7 @@ TRAINER_CONFIG = TrainerConfig(
     pin_memory=True,
     validation_samples=50_000,
     validation_interval=200_000,
-    checkpoint_filepath="checkpoints/model.pt"
+    checkpoint_filepath="checkpoints/model2.pt"
 )
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

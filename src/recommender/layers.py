@@ -280,9 +280,10 @@ class TransformerBlockStack(nn.Module):
         self.blocks = nn.ModuleList(
             [TransformerBlock(config) for _ in range(config.n_layer)]
         )
+        self.ln = nn.LayerNorm(config.d_model)
     
     def forward(self, x):
         # x: [B, T, C]
         for block in self.blocks:
             x = block(x)
-        return x
+        return self.ln(x)
