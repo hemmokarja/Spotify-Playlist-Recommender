@@ -74,8 +74,6 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
         self.loss_fn = SampledSoftmaxLoss(temperature)
 
-        self.register_buffer("_embedding_cache", None)
-
     def loss(self, hidden, y, loss_mask: torch.Tensor | None = None):
         # hidden: [B, T, C]
         # y: [B, T]
