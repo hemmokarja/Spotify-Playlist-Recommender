@@ -15,7 +15,7 @@ CHECKPOINT_PATH = None  # if None, start from scratch
 N_SAMPLES_TRAIN = 1_000_000
 
 MODEL_CONFIG = ModelConfig(
-    n_layer=3,
+    n_layer=5,
     d_name=768,
     d_model=128,
     d_artist=None,
@@ -31,9 +31,9 @@ MODEL_CONFIG = ModelConfig(
     loss_temperature=1.0
 )
 TRAINER_CONFIG = TrainerConfig(
-    batch_size=1024,
-    gradient_acc_steps=1,
-    log_interval=1024,
+    batch_size=2048,
+    gradient_acc_steps=4,
+    log_interval=2048,
     compile=True,
     base_learning_rate=3e-4,
     min_learning_rate=1e-6,
@@ -46,7 +46,7 @@ TRAINER_CONFIG = TrainerConfig(
     prefetch_factor=4,
     pin_memory=True,
     validation_samples=5_000,
-    validation_interval=50_000,
+    validation_interval=10000,
     checkpoint_filepath="checkpoints/model.pt"
 )
 

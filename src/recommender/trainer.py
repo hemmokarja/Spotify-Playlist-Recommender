@@ -324,7 +324,6 @@ class Trainer:
 
     def _validate(self) -> dict:
         self.model.eval()
-        self.model.head.init_cache()
 
         self.validation_iterator = iter(self.validation_loader)
         all_batch_metrics = []
@@ -335,10 +334,11 @@ class Trainer:
                 batch = self._get_next_batch("validation")
                 batch = self._prepare_batch(batch)
 
-                loss = self.model(**batch)
-                probs = self.model.last_step_probs(
-                    **{k: v for k, v in batch.items() if k != "y"}
-                )
+                with self.ctx:
+                    loss = self.model(**batch)
+                    probs = self.model.last_step_probs(
+                        **{k: v for k, v in batch.items() if k != "y"}
+                    )
 
                 batch_idx = torch.arange(batch["x"].size(0), device=self.device)
                 y_last = batch["y"][batch_idx, batch["seq_len"]]  # [B]
@@ -350,7 +350,7 @@ class Trainer:
 
         metrics = _aggregate_metrics(all_batch_metrics)
 
-        self.model.head.reset_cache()
+        torch.cuda.empty_cache()
         self.model.train()
         return metrics
 

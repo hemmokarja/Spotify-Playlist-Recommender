@@ -122,12 +122,3 @@ class SampledSoftmaxPredictionHead(nn.Module):
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
 
         return F.softmax(logits, dim=-1)  # [B, vocab_size]
-
-    def init_cache(self):
-        with torch.no_grad():
-            device = next(self.track_embedder.parameters()).device
-            all_indices = torch.arange(self.vocab_size, device=device)
-            self.register_buffer("_embedding_cache", self.track_embedder(all_indices))
-
-    def reset_cache(self):
-        self.register_buffer("_embedding_cache", None, persistent=False)
