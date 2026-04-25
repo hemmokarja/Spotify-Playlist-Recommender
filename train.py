@@ -39,16 +39,15 @@ TRAINER_CONFIG = TrainerConfig(
     min_learning_rate=1e-6,
     lr_step_size=1_000_000,
     lr_gamma=0.75,
-    weight_decay=0.001,
+    weight_decay=1e-5,
     betas=(0.9, 0.95),
     grad_clip=1.0,
     num_workers=2,
     prefetch_factor=4,
     pin_memory=True,
-    validation_samples=5_000,
-    validation_interval=10000,
-    # checkpoint_filepath="checkpoints/model.pt"
-    checkpoint_filepath=None
+    validation_samples=50_000,
+    validation_interval=200_000,
+    checkpoint_filepath="checkpoints/model.pt"
 )
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

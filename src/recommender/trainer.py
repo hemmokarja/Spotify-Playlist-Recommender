@@ -131,7 +131,10 @@ def _print_validation_results(
     h, m, s = took_hms
 
     print("\n" + "="*80)
-    print(f"VALIDATION RESULTS (samples seen: {samples_seen:,}, {h:02}:{m:02}:{s:02})")
+    print(
+        f"VALIDATION RESULTS (samples seen: {samples_seen:,}, "
+        f"time: {h:02}:{m:02}:{s:02})"
+    )
     print("-"*80)
     print(f"  📉 Loss:     {metrics['loss']:.4f}")
     print(f"  🎯 Hit rate: {metrics['hit_rate']:.1%}")
