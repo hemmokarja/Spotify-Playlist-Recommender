@@ -17,7 +17,7 @@ N_SAMPLES_TRAIN = 1_000_000
 MODEL_CONFIG = ModelConfig(
     n_layer=5,
     d_name=768,
-    d_model=128,
+    d_model=256,
     d_artist=None,
     d_cont=None,
     n_head=8,
@@ -47,7 +47,8 @@ TRAINER_CONFIG = TrainerConfig(
     pin_memory=True,
     validation_samples=5_000,
     validation_interval=10000,
-    checkpoint_filepath="checkpoints/model.pt"
+    # checkpoint_filepath="checkpoints/model.pt"
+    checkpoint_filepath=None
 )
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

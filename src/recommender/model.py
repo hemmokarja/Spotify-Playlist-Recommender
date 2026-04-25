@@ -15,6 +15,8 @@ from recommender.model_config import ModelConfig
 
 logger = structlog.get_logger(__name__)
 
+_FULL_PROBS_CHUNK_SIZE = 100_000
+
 
 @torch.no_grad()
 def _make_popularity_sampling_distribution(
@@ -140,7 +142,7 @@ class PlaylistRecommender(nn.Module):
         e = self.propagate_hidden(name, x)  # [B, T, C]
         batch_idx = torch.arange(e.shape[0], device=e.device)
         e_last = e[batch_idx, seq_len]  # [B, C]
-        return self.head.full_probs(e_last, allowed_mask)  # [B, vocab_size]
+        return self.head.full_probs(e_last, allowed_mask, _FULL_PROBS_CHUNK_SIZE)  # [B, vocab_size]
 
     @classmethod
     def from_config(cls, config) -> "PlaylistRecommender":

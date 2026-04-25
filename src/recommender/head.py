@@ -111,12 +111,27 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def full_probs(self, hidden, allowed_mask: torch.Tensor | None = None):
+    def full_probs(
+        self,
+        hidden,
+        allowed_mask: torch.Tensor | None = None,
+        chunk_size: int | None = None
+    ):
         # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
-        all_indices = torch.arange(self.vocab_size, device=hidden.device)
-        e_track = self.track_embedder(all_indices)  # [vocab_size, C]
-        logits = hidden @ e_track.T
+        # chunk_size: if set, computes logits in chunks to avoid materializing [vocab_size, C]
+        if chunk_size is None:
+            all_indices = torch.arange(self.vocab_size, device=hidden.device)
+            e_track = self.track_embedder(all_indices)  # [vocab_size, C]
+            logits = hidden @ e_track.T  # [B, vocab_size]
+        else:
+            chunks = []
+            for start in range(0, self.vocab_size, chunk_size):
+                end = min(start + chunk_size, self.vocab_size)
+                indices = torch.arange(start, end, device=hidden.device)
+                e_chunk = self.track_embedder(indices)  # [chunk_size, C]
+                chunks.append(hidden @ e_chunk.T)  # [B, chunk_size]
+            logits = torch.cat(chunks, dim=1)  # [B, vocab_size]
 
         if allowed_mask is not None:
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
