@@ -28,7 +28,7 @@ class Tensoriser:
         self.track_id_to_name = dict(zip(tracks.track_id, tracks.track_name))
         self.track_id_to_artist = dict(zip(tracks.track_id, tracks.artist_name))
 
-    def _tensorise(
+    def tensorise(
         self, playlist_name: str, playlist: np.ndarray, inference: bool = False
     ) -> dict:
         if not isinstance(playlist, np.ndarray):
@@ -48,7 +48,7 @@ class Tensoriser:
         return sample
 
     def collate_fn(self, batch: list[dict]) -> dict:
-        samples = [self._tensorise(s["name"], s["playlist"]) for s in batch]
+        samples = [self.tensorise(s["name"], s["playlist"]) for s in batch]
         max_x_len = max(s["x"].shape[0] for s in samples)
         x_pads = [max_x_len - s["x"].shape[0] for s in samples]
         collated = {

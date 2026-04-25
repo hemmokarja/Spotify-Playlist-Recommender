@@ -254,11 +254,11 @@ class Trainer:
             batch = self._prepare_batch(batch)
 
             with self.ctx:
-                loss = self.model(**batch)
+                loss = self.model(**batch, loss_mask=self.model.train_mask)
                 loss /= self.config.gradient_acc_steps
                 loss.backward()
                 total_loss += loss.item()
-            
+
             self.samples_seen += self._samples_in_batch(batch)
 
         if self.config.grad_clip is not None:
@@ -338,14 +338,16 @@ class Trainer:
                 batch = self._prepare_batch(batch)
 
                 with self.ctx:
-                    loss = self.model(**batch)
+                    loss = self.model(**batch, loss_mask=self.model.train_mask)
+
+                    y = batch.pop("y")
+
                     top_k_indices = self.model.top_k_indices(
-                        **{k: v for k, v in batch.items() if k != "y"},
-                        top_k=_EVAL_TOP_K
+                        **batch, top_k=_EVAL_TOP_K,
                     )
 
                 batch_idx = torch.arange(batch["x"].size(0), device=self.device)
-                y_last = batch["y"][batch_idx, batch["seq_len"]]  # [B]
+                y_last = y[batch_idx, batch["seq_len"]]  # [B]
 
                 batch_metrics = _compute_batch_metrics(top_k_indices, y_last)
                 batch_metrics["loss"] = loss.item()

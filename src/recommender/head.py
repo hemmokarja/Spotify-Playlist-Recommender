@@ -79,7 +79,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
     def loss(self, hidden, y, loss_mask: torch.Tensor | None = None):
         # hidden: [B, T, C]
         # y: [B, T]
-        # extra_mask: [vocab_size]
+        # loss_mask: [vocab_size]
         hidden = hidden.view(-1, hidden.size(-1))  # [B', C]
         y = y.view(-1)  # [B']
 

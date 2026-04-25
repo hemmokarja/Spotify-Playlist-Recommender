@@ -44,6 +44,7 @@ def _make_popularity_sampling_distribution(
 @dataclass
 class Recommendation:
     position: int
+    track_index: int
     track: str
     artist: str
 
@@ -113,14 +114,16 @@ class PlaylistRecommender(nn.Module):
         name: list[str],
         x: torch.Tensor,
         y: torch.Tensor | None = None,
-        *args,
-        **kwargs,
+        seq_len: torch.Tensor = None,
+        loss_mask: torch.Tensor | None = None,  
     ):
         # name: [B]
         # x: [B, T-1]
         # y: [B, T] (optional)
+        # seq_len: [B] (not used, allow passing batch directly to forward)
+        # loss_mask: [vocab_size], don't consider these items in loss
         e = self.propagate_hidden(name, x)
-        loss = self.head.loss(e, y, self.train_mask)
+        loss = self.head.loss(e, y, loss_mask)
         return loss
 
     def propagate_hidden(self, name: list[str], x: torch.Tensor):
@@ -184,6 +187,8 @@ class PlaylistRecommender(nn.Module):
         for name, state in d["states"].items():
             getattr(model, name).load_state_dict(state)
 
+        model.name_embedder.model.to(model.get_device())
+
         return model
 
     def num_params(self, trainable_only=False):
@@ -232,6 +237,7 @@ class PlaylistRecommenderInference:
         return [
             Recommendation(
                 position=pos,
+                track_index=ix,
                 track=self.tensoriser.track_id_to_name[ix],
                 artist=self.tensoriser.track_id_to_artist[ix],
             )
