@@ -1,5 +1,7 @@
 .venv
 *.egg-info
 .env
-.data
+data/data
 _*.ipynb
+__pycache__
+checkpoints
