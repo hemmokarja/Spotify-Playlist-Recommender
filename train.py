@@ -51,8 +51,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def initialize_trainer_from_scratch():
-    config = ModelConfig(n_layer=3, d_model=128, d_name=768)
-    model = PlaylistRecommender.from_config(config)
+    model = PlaylistRecommender.from_config(MODEL_CONFIG)
     train_dataset = PlaylistDataset("train")
     validation_dataset = PlaylistDataset("test")
     trainer =  Trainer(
