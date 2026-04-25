@@ -1,20 +1,20 @@
 import collections
 import contextlib
 import datetime
-import logging
 import os
 import time
 from dataclasses import dataclass, asdict
 from typing import Tuple, Optional
 
 import numpy as np
+import structlog
 import torch
 from torch.utils.data import DataLoader
 
 from recommender.data import PlaylistDataset
 from recommender.model import PlaylistRecommender
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @dataclass
@@ -305,7 +305,7 @@ class Trainer:
                 took_hms = _to_hms(took_total)
 
                 _print_train_results(
-                    iter=i,
+                    iter_=i,
                     samples_seen=self.samples_seen,
                     avg_loss=np.mean(recent_losses),
                     lr=self.get_current_lr(),
