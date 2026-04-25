@@ -68,6 +68,10 @@ class SampledSoftmaxPredictionHead(nn.Module):
         temperature: float = 1.0,
     ):
         super().__init__()
+        # NOTE about using track_embedder in the head: we should never apply artist
+        # dropout here. Candidate embeddings must be deterministic — stochastically
+        # zeroing the artist component during loss computation would send contradictory
+        # gradient signals
         self.track_embedder = track_embedder
         self.vocab_size = len(sampling_probs)
 
@@ -92,8 +96,8 @@ class SampledSoftmaxPredictionHead(nn.Module):
         sampler_output = self.sampler(y)
         sampled_indices = sampler_output.sampled_indices  # [n_samples]
 
-        e_pos = self.track_embedder(y)  # [B', C]
-        e_neg = self.track_embedder(sampled_indices)  # [n_samples, C]
+        e_pos = self.track_embedder(y, apply_artist_dropout=False)  # [B', C]
+        e_neg = self.track_embedder(sampled_indices, apply_artist_dropout=False)  # [n_samples, C]
 
         pos_logits = (hidden * e_pos).sum(dim=1)  # [B']
         neg_logits = hidden @ e_neg.T  # [B', n_samples]
@@ -113,7 +117,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=hidden.device)
-        e_track = self.track_embedder(all_indices)  # [vocab_size, C]
+        e_track = self.track_embedder(all_indices, apply_artist_dropout=False)  # [vocab_size, C]
         logits = hidden @ e_track.T
 
         if allowed_mask is not None:
@@ -141,7 +145,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         for start in range(0, self.vocab_size, chunk_size):
             end = min(start + chunk_size, self.vocab_size)
             indices = torch.arange(start, end, device=hidden.device)
-            e_chunk = self.track_embedder(indices)  # [chunk, C]
+            e_chunk = self.track_embedder(indices, apply_artist_dropout=False)  # [chunk, C]
             chunk_logits = hidden @ e_chunk.T  # [B, chunk]
 
             if allowed_mask is not None:

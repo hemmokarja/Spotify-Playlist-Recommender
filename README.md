@@ -51,7 +51,7 @@ Playlist names are embedded with **[Embedding Gemma (300M)](https://huggingface.
 
 ### Sampled Softmax prediction head
 
-With ~2.2M tracks in the vocabulary, standard cross-entropy is not viable. The `SampledSoftmaxPredictionHead` addresses this with:
+With ~2.2M tracks in the vocabulary, standard cross-entropy is not viable. The `SampledSoftmaxPredictionHead` reformulates next-track prediction as **contrastive learning**: for each position, the model scores the true next track against a small set of sampled negatives using dot products between the transformer's hidden state and `TrackEmbedder` output vectors. This contrastive framing is what makes dynamic catalogues possible: scoring a new track at inference time requires only its audio attributes, not a learned ID vector.
 
 - **Popularity-based negative sampling** — negatives are drawn proportionally to how frequently each track appears in the dataset, with configurable smoothing (`smoothing_factor`) and optional uniform mixing (`uniform_mix_factor`) to prevent over-concentration on head items.
 - **Log-Q correction (importance sampling)** — to correct for the bias introduced by non-uniform sampling, each logit is adjusted by subtracting $\log Q(y)$, where $Q(y)$ is the sampling probability of item $y$. This recovers an unbiased estimate of the full softmax:
@@ -59,6 +59,12 @@ With ~2.2M tracks in the vocabulary, standard cross-entropy is not viable. The `
 $$\tilde{z}_i = \frac{z_i}{T} - \log Q(y_i)$$
 
 - The corrected positive and negative logits are concatenated and passed to a standard cross-entropy loss, reducing each training step to an `[B, 1 + n_neg_samples]` operation rather than `[B, 2_200_000]`.
+
+This setup creates **two distinct gradient paths into `TrackEmbedder`**:
+1. **Through the hidden states** — `TrackEmbedder` embeds the input sequence; those embeddings flow through the full transformer stack whose output is then compared against item vectors. This path teaches the embedder to produce representations that the transformer can meaningfully contextualise.
+2. **Through the item vectors** — `TrackEmbedder` also produces the candidate embeddings that the hidden state is scored against. Gradients flow directly into it from the contrastive loss, pushing the audio-feature space to be geometrically consistent with what the transformer learns to predict.
+
+Because both paths share the same `TrackEmbedder` weights, the audio-feature embedding space is jointly shaped by what it means to *be in a context* and what it means to *be a good next item*.
 
 ---
 

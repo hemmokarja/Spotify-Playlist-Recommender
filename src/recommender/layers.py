@@ -60,21 +60,15 @@ class PlaylistNameEmbedder(nn.Module):
         self.proj.load_state_dict(state_dict, strict=strict)
 
 
-class EmbeddingDropout(nn.Module):
-    """Zeroes out probabilistically entire embedding at a time"""
-    def __init__(self, p):
-        super().__init__()
-        assert 0.0 <= p < 1.0
-        self.p = p
+def _artist_dropout(x: torch.Tensor, p: float, training: bool) -> torch.Tensor:
+    """Zeroes out entire embeddings probabilistically (one mask per position)."""
+    # x: [B, T, C]
+    if not training or p == 0.0:
+        return x
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, T, C]
-        if not self.training or self.p == 0.0:
-            return x
-
-        B, T, _ = x.size()
-        keep_mask = (torch.rand((B, T, 1), device=x.device) > self.p).float()
-        return (x * keep_mask) / (1.0 - self.p)
+    B, T, _ = x.size()
+    keep_mask = (torch.rand((B, T, 1), device=x.device) > p).float()
+    return (x * keep_mask) / (1.0 - p)
 
 
 class TrackEmbedder(nn.Module):
@@ -125,8 +119,6 @@ class TrackEmbedder(nn.Module):
         self.ln = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(config.dropout)
 
-        self.artist_dropout = EmbeddingDropout(config.artist_dropout)
-
     @classmethod
     def from_config_and_tensoriser(
         cls, config: ModelConfig, tensoriser: Tensoriser
@@ -147,7 +139,7 @@ class TrackEmbedder(nn.Module):
             tensoriser.cat_vocab_sizes,
         )
 
-    def forward(self, x):
+    def forward(self, x, apply_artist_dropout: bool = True):
         # x: [B] or [B, T] — T may be 0 for empty playlists
         is_1d = x.dim() == 1
         if is_1d:
@@ -164,7 +156,10 @@ class TrackEmbedder(nn.Module):
         x_artist = self.artist_mapping[x]  # [B, T]
 
         e_artist = self.artist_emb(x_artist)  # [B, T, d_artist]
-        e_artist = self.artist_dropout(e_artist)  # [B, T, d_artist]
+        if apply_artist_dropout:
+            e_artist = _artist_dropout(
+                e_artist, self.config.artist_dropout, self.training
+            )  # [B, T, d_artist]
 
         e_cont = self.cont_mlp(x_cont)  # [B, T, d_cont]
 

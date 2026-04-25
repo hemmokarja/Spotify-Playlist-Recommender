@@ -22,7 +22,7 @@ MODEL_CONFIG = ModelConfig(
     d_cont=None,
     n_head=8,
     dropout=0.0,
-    artist_dropout=0.01,
+    artist_dropout=0.3,
     bias=True,
     rope_base=10_000.0,
     n_neg_samples=15_000,
@@ -47,7 +47,7 @@ TRAINER_CONFIG = TrainerConfig(
     pin_memory=True,
     validation_samples=50_000,
     validation_interval=200_000,
-    checkpoint_filepath="checkpoints/model2.pt"
+    checkpoint_filepath="checkpoints/model.pt"
 )
 DATA_CONFIG = DataConfig(p_sample_cold_start=0.01)
 
