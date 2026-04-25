@@ -93,10 +93,16 @@ class PlaylistRecommender(nn.Module):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
+            if not module.weight.requires_grad:
+                # avoid overwriting pre-trained text embedding model
+                return
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
+            if not module.weight.requires_grad:
+                # avoid overwriting pre-trained text embedding model
+                return
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.padding_idx is not None:
                 with torch.no_grad():
@@ -104,7 +110,8 @@ class PlaylistRecommender(nn.Module):
 
     def _init_skip_proj_weights(self):
         for pn, p in self.named_parameters():
-            if pn.endswith("c_proj.weight"):
+            if pn.endswith("c_proj.weight") and p.requires_grad:
+                # avoid overwriting pre-trained text embedding model
                 torch.nn.init.normal_(
                     p, mean=0.0, std=0.02 / math.sqrt(2 * self.config.n_layer)
                 )
