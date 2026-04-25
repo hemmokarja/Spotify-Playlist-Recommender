@@ -24,8 +24,8 @@ The model is a **causal transformer decoder** trained on individual playlists as
 
 ```
 [playlist_name_token]  [track_1]  [track_2]  ...  [track_n]
-        ↑                                               ↑
-  always present,                              predicted at each step
+        ↑                                             ↑
+  always present,                            predicted at each step
   never predicted
 ```
 
