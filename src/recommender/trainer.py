@@ -314,6 +314,7 @@ class Trainer:
                 )
 
             if self._crossed_interval(self.config.validation_interval):
+                print("Validating...")
                 metrics = self._validate()
                 took_total = time.time() - t_start
                 took_hms = _to_hms(took_total)

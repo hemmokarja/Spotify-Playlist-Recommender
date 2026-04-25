@@ -72,7 +72,7 @@ def initialize_trainer_from_scratch():
 
 
 def initalize_trainer_from_checkpoint():
-    logger.info("Continuing SFT run from a checkpoint")
+    logger.info("Continuing run from a checkpoint")
 
     transforms = [ColdStartTransform(DATA_CONFIG.p_sample_cold_start)]
     train_dataset = PlaylistDataset("train", transforms)
