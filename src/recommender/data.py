@@ -34,6 +34,8 @@ class Tensoriser:
         if not isinstance(playlist, np.ndarray):
             playlist = np.asarray(playlist)
 
+        playlist = playlist.copy()
+
         x = playlist[:-1] if not inference else playlist
 
         sample = {

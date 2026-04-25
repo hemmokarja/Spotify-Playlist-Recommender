@@ -327,6 +327,7 @@ class Trainer:
 
     def _validate(self) -> dict:
         self.model.eval()
+        self.model.head.init_cache()
 
         self.validation_iterator = iter(self.validation_loader)
         all_batch_metrics = []
@@ -351,6 +352,8 @@ class Trainer:
                 all_batch_metrics.append(batch_metrics)
 
         metrics = _aggregate_metrics(all_batch_metrics)
+
+        self.model.head.reset_cache()
         self.model.train()
         return metrics
 

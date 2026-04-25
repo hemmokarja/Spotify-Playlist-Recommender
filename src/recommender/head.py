@@ -74,6 +74,8 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
         self.loss_fn = SampledSoftmaxLoss(temperature)
 
+        self.register_buffer("_embedding_cache", None)
+
     def loss(self, hidden, y, loss_mask: torch.Tensor | None = None):
         # hidden: [B, T, C]
         # y: [B, T]
@@ -120,3 +122,12 @@ class SampledSoftmaxPredictionHead(nn.Module):
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
 
         return F.softmax(logits, dim=-1)  # [B, vocab_size]
+
+    def init_cache(self):
+        with torch.no_grad():
+            device = next(self.track_embedder.parameters()).device
+            all_indices = torch.arange(self.vocab_size, device=device)
+            self.register_buffer("_embedding_cache", self.track_embedder(all_indices))
+
+    def reset_cache(self):
+        self.register_buffer("_embedding_cache", None, persistent=False)
