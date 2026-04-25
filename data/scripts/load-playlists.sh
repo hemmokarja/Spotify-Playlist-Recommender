@@ -9,7 +9,7 @@ set +a
 DATASET="himanshuwagh/spotify-million"
 TARGET_DIR="data/raw-datasets/playlists"
 
-kaggle datasets download -d $DATASET -p $TARGET_DIR --unzip
+uv run kaggle datasets download -d $DATASET -p $TARGET_DIR --unzip
 
 uv run python data/scripts/playlists_to_parquet.py
 
