@@ -1,7 +1,7 @@
 import torch
 import structlog
 
-from recommender.data import PlaylistDataset
+from recommender.data import DataConfig, PlaylistDataset, ColdStartTransform
 from recommender.model import PlaylistRecommender
 from recommender.model_config import ModelConfig
 from recommender.trainer import Trainer, TrainerConfig
@@ -49,14 +49,18 @@ TRAINER_CONFIG = TrainerConfig(
     validation_interval=200_000,
     checkpoint_filepath="checkpoints/model2.pt"
 )
+DATA_CONFIG = DataConfig(p_sample_cold_start=0.01)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def initialize_trainer_from_scratch():
     model = PlaylistRecommender.from_config(MODEL_CONFIG)
-    train_dataset = PlaylistDataset("train")
+
+    transforms = [ColdStartTransform(DATA_CONFIG.p_sample_cold_start)]
+    train_dataset = PlaylistDataset("train", transforms)
     validation_dataset = PlaylistDataset("test")
+    
     trainer =  Trainer(
         TRAINER_CONFIG,
         model,
@@ -70,7 +74,8 @@ def initialize_trainer_from_scratch():
 def initalize_trainer_from_checkpoint():
     logger.info("Continuing SFT run from a checkpoint")
 
-    train_dataset = PlaylistDataset("train")
+    transforms = [ColdStartTransform(DATA_CONFIG.p_sample_cold_start)]
+    train_dataset = PlaylistDataset("train", transforms)
     validation_dataset = PlaylistDataset("test")
 
     trainer = Trainer.from_checkpoint(

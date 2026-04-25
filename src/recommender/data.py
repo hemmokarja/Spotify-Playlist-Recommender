@@ -1,8 +1,16 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
+
+
+@dataclass
+class DataConfig:
+    p_sample_cold_start: float = 0.0
 
 
 class Tensoriser:
@@ -93,13 +101,42 @@ class Tensoriser:
         return cls(tracks)
 
 
+class BaseTransform(ABC):
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def __call__(self, playlist: np.ndarray) -> np.ndarray:
+        pass
+
+
+class ColdStartTransform(BaseTransform):
+    """Randomly truncate sequence to length one (y only)"""
+    def __init__(self, p):
+        super().__init__()
+        self.p = p
+
+    def __call__(self, playlist: np.ndarray) -> np.ndarray:
+        if np.random.random() < self.p:
+            return playlist[:1]
+        return playlist
+
+
 class PlaylistDataset(Dataset):
-    def __init__(self, split: str):
+    def __init__(self, split: str, transforms: list[BaseTransform] | None = None):
         self.df = pd.read_parquet(f"data/data/{split}.parquet")
+        self.transforms = transforms
 
     def __len__(self) -> int:
         return len(self.df)
 
+    def _transform(self, playlist: np.ndarray) -> np.ndarray:
+        if self.transforms is not None:
+            for transform in self.transforms:
+                playlist = transform(playlist)
+        return playlist
+
     def __getitem__(self, idx: int) -> dict:
         row = self.df.iloc[idx]
-        return {"name": row.playlist_name, "playlist": row.playlist}
+        playlist = self._transform(row.playlist)
+        return {"name": row.playlist_name, "playlist": playlist}
