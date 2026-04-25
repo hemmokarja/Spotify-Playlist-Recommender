@@ -131,15 +131,12 @@ def _print_validation_results(
     h, m, s = took_hms
 
     print("\n" + "="*80)
-    print("VALIDATION RESULTS")
-    print("="*80)
+    print(f"VALIDATION RESULTS (samples seen: {samples_seen:,}, {h:02}:{m:02}:{s:02})")
+    print("-"*80)
+    print(f"  📉 Loss:     {metrics['loss']:.4f}")
+    print(f"  🎯 Hit rate: {metrics['hit_rate']:.1%}")
 
-    print(f"📊 METRICS (samples seen: {samples_seen:,}, {h:02}:{m:02}:{s:02})")
-    print("-" * 40)
-    print(f"  Loss:     {metrics['loss']:.4f}")
-    print(f"  Hit rate: {metrics['hit_rate']:.1%}")
-
-    print("\n" + "="*80 + "\n")
+    print("="*80 + "\n")
 
 
 class Trainer:
