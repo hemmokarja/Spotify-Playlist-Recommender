@@ -276,7 +276,7 @@ class Trainer:
         return this_iter > prev_iter
 
     def train(self, n_samples: int):
-        logger.info(f"Staring model training for {n_samples} samples...")
+        logger.info(f"Staring model training for {n_samples:,} samples...")
 
         self.model.train()
 
