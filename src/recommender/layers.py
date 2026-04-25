@@ -5,11 +5,14 @@ import requests
 import structlog
 import torch
 import torch.nn as nn
+from dotenv import load_dotenv
 from huggingface_hub.utils import GatedRepoError
 from sentence_transformers import SentenceTransformer
 
 from recommender.data import Tensoriser
 from recommender.model_config import ModelConfig
+
+load_dotenv()
 
 logger = structlog.get_logger(__name__)
 
@@ -30,6 +33,7 @@ class PlaylistNameEmbedder(nn.Module):
 
         self.proj = nn.Linear(config.d_name, config.d_model)
 
+    @torch._dynamo.disable
     def forward(self, names: list[str]) -> torch.Tensor:
         with torch.no_grad():
             e_name = self.model.encode(names, convert_to_tensor=True)  # [B, d_name]

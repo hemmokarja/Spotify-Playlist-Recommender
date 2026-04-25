@@ -8,8 +8,11 @@ from recommender.trainer import Trainer, TrainerConfig
 
 logger = structlog.get_logger(__name__)
 
+torch.set_float32_matmul_precision("high")
+torch.backends.cudnn.allow_tf32 = True
+
 CHECKPOINT_PATH = None  # if None, start from scratch
-N_SAMPLES_TRAIN = 280_000
+N_SAMPLES_TRAIN = 1_000_000
 
 MODEL_CONFIG = ModelConfig(
     n_layer=3,
@@ -31,19 +34,19 @@ TRAINER_CONFIG = TrainerConfig(
     batch_size=1024,
     gradient_acc_steps=1,
     log_interval=1024,
-    compile=False,
+    compile=True,
     base_learning_rate=3e-4,
     min_learning_rate=1e-6,
-    lr_step_size=20_000,
+    lr_step_size=1_000_000,
     lr_gamma=0.75,
-    weight_decay=0.01,
+    weight_decay=0.001,
     betas=(0.9, 0.95),
     grad_clip=1.0,
-    num_workers=1,
-    prefetch_factor=2,
-    pin_memory=False,
+    num_workers=2,
+    prefetch_factor=4,
+    pin_memory=True,
     validation_samples=5_000,
-    validation_interval=10_000,
+    validation_interval=50_000,
     checkpoint_filepath="checkpoints/model.pt"
 )
 

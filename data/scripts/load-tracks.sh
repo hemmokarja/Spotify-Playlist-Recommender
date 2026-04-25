@@ -9,8 +9,8 @@ set +a
 DATASET="krishsharma0413/2-million-songs-from-mpd-with-audio-features"
 TARGET_DIR="data/raw-datasets/tracks"
 
-kaggle datasets download -d $DATASET -p $TARGET_DIR --unzip
+uv run kaggle datasets download -d $DATASET -p $TARGET_DIR --unzip
 
-uv run pythondata/scripts/tracks_to_parquet.py
+uv run python data/scripts/tracks_to_parquet.py
 
 rm -rf $TARGET_DIR
