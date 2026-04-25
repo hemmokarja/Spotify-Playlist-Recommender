@@ -16,6 +16,8 @@ from recommender.model import PlaylistRecommender
 
 logger = structlog.get_logger(__name__)
 
+_EVAL_TOP_K = 10
+
 
 @dataclass
 class TrainerConfig:
@@ -81,11 +83,9 @@ def _configure_optimizer(
 
 
 def _compute_batch_metrics(
-    probs: torch.Tensor,  # [B, vocab_size]
+    top_k_indices: torch.Tensor,  # [B, k]
     y_last: torch.Tensor,  # [B]
-    k: int = 10,
 ) -> dict[str, float]:
-    top_k_indices = torch.topk(probs, k=k, dim=-1).indices  # [B, k]
     hits = (top_k_indices == y_last.unsqueeze(-1)).any(dim=-1).float()  # [B]
     return {"hit_rate": hits.mean().item()}
 
@@ -336,14 +336,15 @@ class Trainer:
 
                 with self.ctx:
                     loss = self.model(**batch)
-                    probs = self.model.last_step_probs(
-                        **{k: v for k, v in batch.items() if k != "y"}
+                    top_k_indices = self.model.top_k_indices(
+                        **{k: v for k, v in batch.items() if k != "y"},
+                        top_k=_EVAL_TOP_K
                     )
 
                 batch_idx = torch.arange(batch["x"].size(0), device=self.device)
                 y_last = batch["y"][batch_idx, batch["seq_len"]]  # [B]
 
-                batch_metrics = _compute_batch_metrics(probs, y_last)
+                batch_metrics = _compute_batch_metrics(top_k_indices, y_last)
                 batch_metrics["loss"] = loss.item()
 
                 all_batch_metrics.append(batch_metrics)

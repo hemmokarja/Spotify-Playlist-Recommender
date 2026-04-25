@@ -43,7 +43,7 @@ def _make_popularity_sampling_distribution(
 
 @dataclass
 class Recommendation:
-    prob: float
+    position: int
     track: str
     artist: str
 
@@ -132,17 +132,20 @@ class PlaylistRecommender(nn.Module):
         e = self.block_stack(e)  # [B, T, C]
         return e
 
-    def last_step_probs(
+    def top_k_indices(
         self,
         name: list[str],
         x: torch.Tensor,
         seq_len: torch.Tensor,
+        top_k: int = 10,
         allowed_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         e = self.propagate_hidden(name, x)  # [B, T, C]
         batch_idx = torch.arange(e.shape[0], device=e.device)
         e_last = e[batch_idx, seq_len]  # [B, C]
-        return self.head.full_probs(e_last, allowed_mask, _FULL_PROBS_CHUNK_SIZE)  # [B, vocab_size]
+        return self.head.top_k_indices(
+            e_last, top_k, allowed_mask, _FULL_PROBS_CHUNK_SIZE
+        )  # [B, top_k]
 
     @classmethod
     def from_config(cls, config) -> "PlaylistRecommender":
@@ -206,50 +209,31 @@ class PlaylistRecommenderInference:
         self.tensoriser = model.tensoriser
 
     @torch.inference_mode()
-    def last_step_probs(
-        self,
-        name: list[str],
-        x: torch.Tensor,
-        seq_len: torch.Tensor,
-        allowed_mask: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        # name: [B]
-        # x: [B, T]
-        # seq_len: [B]
-        # allowed_mask: [vocab_size]
-        was_training = self.model.training
-        self.model.eval()
-        probs = self.model.last_step_probs(name, x, seq_len, allowed_mask)
-        self.model.train(was_training)
-        return probs
-
-    def _probs_to_recs(self, probs: torch.Tensor, top_k: int) -> list[Recommendation]:
-        # probs: [n_tracks]
-        top_values, top_indices = torch.topk(probs, k=top_k)
-        recs = []
-        for val, ix in zip(top_values.tolist(), top_indices.tolist()):
-            recs.append(
-                Recommendation(
-                    prob=val,
-                    track=self.tensoriser.track_id_to_name[ix],
-                    artist=self.tensoriser.track_id_to_artist[ix]
-                )
-            )
-        return recs
-
     def get_recommendations(
         self,
         playlist_name: str,
         playlist: list[int],
         top_k: int = 10,
         allowed_mask: torch.Tensor | None = None,
-    ):
+    ) -> list[Recommendation]:
         # allowed_mask: [vocab_size]
         device = self.model.get_device()
         sample = self.tensoriser.tensorise(playlist_name, playlist, inference=True)
         batch = {
             k: _handle_batching(v, device) for k, v in sample.items()
         }
-        probs = self.last_step_probs(**batch, allowed_mask=allowed_mask)
-        probs = probs.squeeze(0)
-        return self._probs_to_recs(probs, top_k)
+        was_training = self.model.training
+        self.model.eval()
+        indices = self.model.top_k_indices(
+            **batch, top_k=top_k, allowed_mask=allowed_mask
+        )
+        self.model.train(was_training)
+        indices = indices.squeeze(0).tolist()  # [top_k]
+        return [
+            Recommendation(
+                position=pos,
+                track=self.tensoriser.track_id_to_name[ix],
+                artist=self.tensoriser.track_id_to_artist[ix],
+            )
+            for pos, ix in enumerate(indices, start=1)
+        ]

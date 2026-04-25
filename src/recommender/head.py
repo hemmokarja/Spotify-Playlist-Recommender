@@ -111,29 +111,52 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def full_probs(
-        self,
-        hidden,
-        allowed_mask: torch.Tensor | None = None,
-        chunk_size: int | None = None
-    ):
+    def full_probs(self, hidden, allowed_mask: torch.Tensor | None = None):
         # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
-        # chunk_size: if set, computes logits in chunks to avoid materializing [vocab_size, C]
-        if chunk_size is None:
-            all_indices = torch.arange(self.vocab_size, device=hidden.device)
-            e_track = self.track_embedder(all_indices)  # [vocab_size, C]
-            logits = hidden @ e_track.T  # [B, vocab_size]
-        else:
-            chunks = []
-            for start in range(0, self.vocab_size, chunk_size):
-                end = min(start + chunk_size, self.vocab_size)
-                indices = torch.arange(start, end, device=hidden.device)
-                e_chunk = self.track_embedder(indices)  # [chunk_size, C]
-                chunks.append(hidden @ e_chunk.T)  # [B, chunk_size]
-            logits = torch.cat(chunks, dim=1)  # [B, vocab_size]
+        all_indices = torch.arange(self.vocab_size, device=hidden.device)
+        e_track = self.track_embedder(all_indices)  # [vocab_size, C]
+        logits = hidden @ e_track.T
 
         if allowed_mask is not None:
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
 
         return F.softmax(logits, dim=-1)  # [B, vocab_size]
+
+    def top_k_indices(
+        self,
+        hidden,
+        k: int,
+        allowed_mask: torch.Tensor | None = None,
+        chunk_size: int = 100_000,
+    ) -> torch.Tensor:
+        # hidden: [B, C]
+        # Returns [B, k] top-k vocab indices without ever materializing [B, vocab_size].
+        # Peak memory: O(B * chunk_size) instead of O(B * vocab_size).
+        best_vals = torch.full(
+            (hidden.size(0), k), float("-inf"), device=hidden.device
+        )  # [B, k]
+        best_idxs = torch.zeros(
+            (hidden.size(0), k), dtype=torch.long, device=hidden.device
+        )  # [B, k]
+
+        for start in range(0, self.vocab_size, chunk_size):
+            end = min(start + chunk_size, self.vocab_size)
+            indices = torch.arange(start, end, device=hidden.device)
+            e_chunk = self.track_embedder(indices)  # [chunk, C]
+            chunk_logits = hidden @ e_chunk.T  # [B, chunk]
+
+            if allowed_mask is not None:
+                chunk_logits = chunk_logits.masked_fill(
+                    ~allowed_mask[start:end].unsqueeze(0), float("-inf")
+                )
+
+            # merge chunk top-k with running top-k
+            combined_vals = torch.cat([best_vals, chunk_logits], dim=1)  # [B, k+chunk]
+            combined_idxs = torch.cat(
+                [best_idxs, indices.unsqueeze(0).expand(hidden.size(0), -1)], dim=1
+            )  # [B, k+chunk]
+            best_vals, local_idxs = torch.topk(combined_vals, k, dim=1)
+            best_idxs = combined_idxs.gather(1, local_idxs)
+
+        return best_idxs  # [B, k]
