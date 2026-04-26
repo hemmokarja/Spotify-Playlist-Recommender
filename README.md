@@ -16,7 +16,7 @@ Add two tracks — *Alice DJ - Better Off Alone* and *DJ Sammy - Heaven* — and
 
 ![name_and_songs](assets/images/recs_name_and_songs.png)
 
-The genre name serves as a starting point; once you add a few tracks, the recommendations quickly start to reflect what you're actually in the mood for.
+The playlist name serves as a starting point; once you add a few tracks, the recommendations quickly start to reflect what you're actually in the mood for.
 
 ---
 
