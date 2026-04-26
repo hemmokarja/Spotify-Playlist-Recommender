@@ -12,7 +12,7 @@ Type "Trance" as a playlist name and it immediately surfaces the genre's canonic
 
 ![name](assets/images/recs_name.png)
 
-Add two tracks - *Alice DJ — Better Off Alone* and *DJ Sammy - Heaven* — the recommendations transform. The model picks up that you're not after deep prog-trance; you want the euphoric, Eurodance-inflected sound of the late 90s. Suddenly it's serving Darude, Haddaway, Vengaboys, Ian van Dahl.
+Add two tracks — *Alice DJ - Better Off Alone* and *DJ Sammy - Heaven* — and the recommendations transform. The model picks up that you're not after deep prog-trance; you want the euphoric, Eurodance-inflected sound of the late 90s. Suddenly it's serving Darude, Haddaway, Vengaboys, Ian van Dahl.
 
 ![name_and_songs](assets/images/recs_name_and_songs.png)
 
