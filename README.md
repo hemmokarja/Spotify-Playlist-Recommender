@@ -1,8 +1,14 @@
 # Spotify Playlist Recommender
 
-A deep learning recommendation system built on the **Spotify Million Playlist Dataset**, augmented with per-track audio attributes from the Spotify API.
+A production-grade deep learning recommendation system built on the **Spotify Million Playlist Dataset**, augmented with per-track audio attributes from the Spotify API.
 
-The model operates as an autoregressive **next-track predictor**: given a playlist (name + tracks seen so far), it predicts what comes next — and because the playlist name is always present as the first token, the model can generate playlists from a name alone.
+The system is designed as an **autoregressive transformer decoder** that treats playlist generation as a sequence modeling task. Unlike standard recommenders that rely on static ID embeddings, this model is built for the realities of modern streaming:
+
+* **Solves the Cold-Start Problem:** Uses a content-based embedding architecture (audio features + metadata) to recommend tracks never seen during training.
+
+* **Scales to Massive Vocabularies:** Implements Sampled Softmax with Log-Q correction to efficiently handle a catalog of over 2.2 million unique tracks.
+
+* **Intent-Driven:** Uses a frozen LLM (Gemma-300M) to project playlist names into the latent space, allowing for high-quality "Zero-Shot" generation from a title alone.
 
 ---
 
@@ -22,11 +28,13 @@ The playlist name serves as a starting point; once you add a few tracks, the rec
 
 ## Problem Statement
 
-Three interconnected challenges drive the design of this system:
+Three core engineering challenges drive the design of this system:
 
-1. **Sequential recommendation** — tracks should be recommended in context, conditioned on everything already in the playlist, not just a static user profile.
-2. **Cold-start on tracks** — music catalogues are highly dynamic. Millions of tracks are uploaded every year. A model that relies solely on learned ID embeddings cannot generalise to tracks it has never seen.
-3. **Massive vocabulary** — the dataset contains ~2.2 million unique tracks. A standard cross-entropy loss over such a vocabulary produces tensors of shape `[B, T, 2_200_000]`, which is computationally untenable.
+1. **Context-Aware Preference Modeling.** Standard collaborative filtering often relies on static user profiles that fail to capture shifting, session-based intent. To provide relevant recommendations, the system must treat playlisting as a sequential modeling task, where every prediction is conditioned on the immediate local context and the playlist's stated "theme".
+
+2. **Inductive Generalization (Cold-Start).** Music catalogs are highly dynamic, with millions of tracks added annually. A "transductive" model relying on learned ID embeddings is obsolete the moment a new track is uploaded. This architecture requires an inductive approach, where track representations are computed on-the-fly from audio attributes, allowing the model to recommend items it has never seen during training.
+
+3. **Computational Scaling to Massive Vocabularies.** The dataset contains ~2.2 million unique tracks. In a traditional multi-class classification setup, a standard cross-entropy loss produces output tensors of shape`[B, T, 2,200,000]`. This creates a memory and compute bottleneck that makes training untenable. The system must move from a "dense classification" mindset to a "contrastive ranking" framework using efficient negative sampling.
 
 ---
 
