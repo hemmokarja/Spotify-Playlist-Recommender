@@ -114,6 +114,10 @@ Training configuration (model size, learning rate schedule, batch size, checkpoi
 
 ---
 
-## Upcoming
+## Interactive UI
 
-- **Interactive UI** — a web interface to generate and explore playlists using the trained model.
+A web interface to generate and explore playlists using the trained model. Run it with:
+
+```bash
+uv run streamlit run src/ui/app.py
+```
