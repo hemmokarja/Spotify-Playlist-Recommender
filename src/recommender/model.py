@@ -15,8 +15,6 @@ from recommender.model_config import ModelConfig
 
 logger = structlog.get_logger(__name__)
 
-_FULL_PROBS_CHUNK_SIZE = 100_000
-
 
 @torch.no_grad()
 def _make_popularity_sampling_distribution(
