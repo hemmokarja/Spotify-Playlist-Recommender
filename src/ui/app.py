@@ -102,6 +102,7 @@ st.markdown(
 
         /* Reduce default top padding */
         .block-container {{ padding-top: 2rem; }}
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -271,7 +272,11 @@ with left:
 # ===== RIGHT: Current playlist =====
 
 with right:
-    playlist_display_name = playlist_name.strip() if "playlist_name" in dir() and playlist_name.strip() else "Playlist"
+    playlist_display_name = (
+        playlist_name.strip()
+        if "playlist_name" in dir() and playlist_name.strip()
+        else "Playlist"
+    )
     st.header(playlist_display_name)
 
     if not st.session_state.playlist:
