@@ -134,6 +134,8 @@ A web interface to generate and explore playlists using the trained model. Run i
 
 ### Examples
 
+*Recommendations generated from the playlist name "trance" with two seed tracks. Top results are canonical late-90s trance without any further input.*
+
 ![Alt text](assets/images/recs_trance.png)
 
 ## License
