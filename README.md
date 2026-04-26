@@ -31,6 +31,8 @@ The model is a **causal transformer decoder** trained on individual playlists as
 
 Because the playlist name token is always the first position and is never masked out, the model learns to condition every prediction on the playlist's intent — functioning as a persistent soft prior throughout generation.
 
+The transformer uses **Rotary Positional Embeddings (RoPE)** rather than learned positional embeddings. Playlist lengths vary enormously in practice, and RoPE generalises more reliably to sequence lengths not seen during training.
+
 ### Track embeddings — content-based, not ID-based
 
 Tracks are embedded from their **audio attributes** rather than a learned per-ID vector. This is the central design decision that solves cold start.
@@ -44,6 +46,8 @@ Tracks are embedded from their **audio attributes** rather than a learned per-ID
 | Artist embedding | artist identity | Learned embedding; unknown artists receive a zero-padding vector |
 
 The three components are projected and fused into a single `d_model`-dimensional vector. When a new track is introduced to the catalogue, it can immediately receive a meaningful embedding from its audio attributes alone — no retraining required.
+
+**Artist dropout** is applied to the artist embedding component during training, preventing the model from over-relying on artist identity as a shortcut. Importantly, this is applied only when embedding tracks as sequence context, and not when computing candidate item vectors in the prediction head. This ensures the model learns to look past artist identity when building context, while still scoring candidates against consistent, unperturbed item vectors.
 
 ### Playlist name embeddings
 
@@ -59,12 +63,18 @@ With ~2.2M tracks in the vocabulary, standard cross-entropy is not viable. The `
 $$\tilde{z}_i = \frac{z_i}{T} - \log Q(y_i)$$
 
 - The corrected positive and negative logits are concatenated and passed to a standard cross-entropy loss, reducing each training step to an `[B, 1 + n_neg_samples]` operation rather than `[B, 2_200_000]`.
+- **False negative masking** — when a sampled negative happens to collide with the true positive for a given example, it is masked out of the loss rather than penalised as a negative. This prevents contradictory gradient signals on items that are genuinely good next-track predictions.
+- **Logit scaling** — dot-product logits are scaled by `1/sqrt(d_model)`, keeping the logit magnitude invariant to model width.
 
 This setup creates **two distinct gradient paths into `TrackEmbedder`**:
 1. **Through the hidden states** — `TrackEmbedder` embeds the input sequence; those embeddings flow through the full transformer stack whose output is then compared against item vectors. This path teaches the embedder to produce representations that the transformer can meaningfully contextualise.
 2. **Through the item vectors** — `TrackEmbedder` also produces the candidate embeddings that the hidden state is scored against. Gradients flow directly into it from the contrastive loss, pushing the audio-feature space to be geometrically consistent with what the transformer learns to predict.
 
 Because both paths share the same `TrackEmbedder` weights, the audio-feature embedding space is jointly shaped by what it means to *be in a context* and what it means to *be a good next item*.
+
+### Inference optimisations
+
+At inference time, the `TrackEmbedder` is replaced with a `FrozenTrackEmbedder`: the full forward pass is run once over the entire vocabulary and the resulting embeddings are cached as a static buffer. Subsequent lookups are then simple index operations (no MLP, no projection, no dropout) making interactive generation fast enough for real-time use in the UI.
 
 ---
 
