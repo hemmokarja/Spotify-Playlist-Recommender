@@ -88,10 +88,11 @@ def initalize_trainer_from_checkpoint():
 
 
 def main():
-    if CHECKPOINT_PATH is None:
-        trainer = initialize_trainer_from_scratch()
-    else:
-        trainer = initalize_trainer_from_checkpoint()
+    trainer = (
+        initialize_trainer_from_scratch()
+        if CHECKPOINT_PATH is None
+        else initalize_trainer_from_checkpoint()
+    )
     trainer.train(N_SAMPLES_TRAIN)
 
 
