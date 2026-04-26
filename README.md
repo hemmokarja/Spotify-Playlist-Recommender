@@ -128,4 +128,4 @@ A web interface to generate and explore playlists using the trained model. Run i
 
 ## License
 
-This project is licensed under the MIT License.
+This repository's source code is licensed under the MIT License. The Embedding Gemma model weights used by this project are subject to the [Gemma Terms of Use](https://ai.google.dev/gemma/terms) and are not covered by the MIT License.
