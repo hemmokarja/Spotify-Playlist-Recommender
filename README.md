@@ -121,3 +121,11 @@ A web interface to generate and explore playlists using the trained model. Run i
 ```bash
 ./run_ui.sh
 ```
+
+### Examples
+
+![Alt text](assets/images/recs_trance.png)
+
+## License
+
+This project is licensed under the MIT License.
