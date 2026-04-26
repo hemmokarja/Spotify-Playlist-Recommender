@@ -100,10 +100,11 @@ st.markdown(
 
 def _load_model(checkpoint_path: str):
     """Load model from checkpoint and store in session state."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device("cpu")
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     model = PlaylistRecommender.from_dict(checkpoint["model"])
-    inf_model = model.to_inference_model()
+    inf_model = model.to_inference_model(freeze_track_embedder=True)
     st.session_state.inf_model = inf_model
     st.session_state.device = device
 

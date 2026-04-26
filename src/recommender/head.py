@@ -82,7 +82,12 @@ class SampledSoftmaxPredictionHead(nn.Module):
         # scale logits by sqrt(C) to make the logit scale invariant to model width
         self.scale = 1.0 / math.sqrt(track_embedder.config.d_model)
 
-    def loss(self, hidden, y, loss_mask: torch.Tensor | None = None):
+    def loss(
+        self,
+        hidden: torch.Tensor,
+        y: torch.Tensor,
+        loss_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
         # hidden: [B, T, C]
         # y: [B, T]
         # loss_mask: [vocab_size]
@@ -117,7 +122,9 @@ class SampledSoftmaxPredictionHead(nn.Module):
             sampler_output.sample_probs,
         )
 
-    def full_probs(self, hidden, allowed_mask: torch.Tensor | None = None):
+    def full_probs(
+        self, hidden: torch.Tensor, allowed_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
         # hidden: [B, C]
         # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=hidden.device)
@@ -131,14 +138,32 @@ class SampledSoftmaxPredictionHead(nn.Module):
 
     def top_k_indices(
         self,
-        hidden,
+        hidden: torch.Tensor,
         k: int,
         allowed_mask: torch.Tensor | None = None,
-        chunk_size: int = 100_000,
+        chunk_size: int | None = 100_000,
+        precomputed_embeddings: torch.Tensor | None = None,
     ) -> torch.Tensor:
         # hidden: [B, C]
-        # Returns [B, k] top-k vocab indices without ever materializing [B, vocab_size].
-        # Peak memory: O(B * chunk_size) instead of O(B * vocab_size).
+        # precomputed_embeddings: [vocab_size, C] (optional, for fast inference)
+        # vocab_chunk_size: if None, materialize full [B, vocab_size] logits in one shot.
+        #   Only pass None when B is small (inference). For large-batch eval, use chunking.
+
+        if chunk_size is None:
+            e_all = (
+                precomputed_embeddings
+                if precomputed_embeddings is not None
+                else self.track_embedder(
+                    torch.arange(self.vocab_size, device=hidden.device),
+                    apply_artist_dropout=False,
+                )
+            )  # [vocab_size, C]
+            logits = hidden @ e_all.T  # [B, vocab_size]
+            if allowed_mask is not None:
+                logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
+            return torch.topk(logits, k, dim=1).indices  # [B, k]
+
+        # chunked path: peak memory O(B * vocab_chunk_size) instead of O(B * vocab_size)
         best_vals = torch.full(
             (hidden.size(0), k), float("-inf"), device=hidden.device
         )  # [B, k]
@@ -149,7 +174,11 @@ class SampledSoftmaxPredictionHead(nn.Module):
         for start in range(0, self.vocab_size, chunk_size):
             end = min(start + chunk_size, self.vocab_size)
             indices = torch.arange(start, end, device=hidden.device)
-            e_chunk = self.track_embedder(indices, apply_artist_dropout=False)  # [chunk, C]
+            e_chunk = (
+                precomputed_embeddings[start:end]
+                if precomputed_embeddings is not None
+                else self.track_embedder(indices, apply_artist_dropout=False)
+            )  # [chunk, C]
             chunk_logits = hidden @ e_chunk.T  # [B, chunk]
 
             if allowed_mask is not None:
@@ -157,7 +186,6 @@ class SampledSoftmaxPredictionHead(nn.Module):
                     ~allowed_mask[start:end].unsqueeze(0), float("-inf")
                 )
 
-            # merge chunk top-k with running top-k
             combined_vals = torch.cat([best_vals, chunk_logits], dim=1)  # [B, k+chunk]
             combined_idxs = torch.cat(
                 [best_idxs, indices.unsqueeze(0).expand(hidden.size(0), -1)], dim=1

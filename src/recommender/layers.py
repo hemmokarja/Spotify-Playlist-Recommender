@@ -174,6 +174,45 @@ class TrackEmbedder(nn.Module):
 
         return e
 
+    def get_device(self):
+        return self.artist_emb.weight.device
+
+
+class FrozenTrackEmbedder(nn.Module):
+    """
+    A materialized, frozen version of TrackEmbedder.
+    Runs the full TrackEmbedder forward pass once over the entire vocabulary and caches
+    the result as a non-trainable buffer. Lookups are then simple index operations - no
+    MLP, no proj, no dropout.
+
+    Use for inference only. Not suitable for training (gradients won't flow back to the
+    original TrackEmbedder parameters).
+    """
+    def __init__(self, embeddings: torch.Tensor):
+        super().__init__()
+        self.register_buffer("embeddings", embeddings)  # [vocab_size, d_model]
+
+    @classmethod
+    def from_track_embedder(
+        cls, track_embedder: TrackEmbedder
+    ) -> "FrozenTrackEmbedder":
+        logger.info("Freezing TrackEmbedder...")
+        vocab_size = track_embedder.cont_feat_mapping.shape[0]
+        device = track_embedder.artist_emb.weight.device
+        all_indices = torch.arange(vocab_size, device=device)
+
+        with torch.no_grad():
+            embeddings = track_embedder(all_indices, apply_artist_dropout=False)  # [vocab_size, C]
+
+        return cls(embeddings)
+
+    def forward(self, x, apply_artist_dropout: bool = False) -> torch.Tensor:
+        # x: [B] or [B, T]
+        return self.embeddings[x]
+
+    def get_device(self):
+        return self.embeddings.device
+
 
 class CausalSelfAttentionWithROPE(nn.Module):
     def __init__(self, config: ModelConfig):

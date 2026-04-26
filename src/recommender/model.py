@@ -9,7 +9,7 @@ import torch.nn as nn
 from recommender.data import Tensoriser
 from recommender.head import SampledSoftmaxPredictionHead
 from recommender.layers import (
-    PlaylistNameEmbedder, TrackEmbedder, TransformerBlockStack
+    FrozenTrackEmbedder, PlaylistNameEmbedder, TrackEmbedder, TransformerBlockStack
 )
 from recommender.model_config import ModelConfig
 
@@ -47,7 +47,7 @@ class PlaylistRecommender(nn.Module):
         config: ModelConfig,
         tensoriser: Tensoriser,
         name_embedder: PlaylistNameEmbedder,
-        track_embedder: TrackEmbedder,
+        track_embedder: TrackEmbedder | FrozenTrackEmbedder,
         block_stack: TransformerBlockStack,
     ):
         super().__init__()
@@ -141,12 +141,18 @@ class PlaylistRecommender(nn.Module):
         seq_len: torch.Tensor,
         top_k: int = 10,
         allowed_mask: torch.Tensor | None = None,
+        chunk_size: int | None = 100_000,
+        precomputed_embeddings: torch.Tensor | None = None,
     ) -> torch.Tensor:
         e = self.propagate_hidden(name, x)  # [B, T, C]
         batch_idx = torch.arange(e.shape[0], device=e.device)
         e_last = e[batch_idx, seq_len]  # [B, C]
         return self.head.top_k_indices(
-            e_last, top_k, allowed_mask, _FULL_PROBS_CHUNK_SIZE
+            hidden=e_last,
+            k=top_k,
+            allowed_mask=allowed_mask,
+            chunk_size=chunk_size,
+            precomputed_embeddings=precomputed_embeddings
         )  # [B, top_k]
 
     @classmethod
@@ -197,10 +203,12 @@ class PlaylistRecommender(nn.Module):
             return sum(p.numel() for p in self.parameters())
 
     def get_device(self):
-        return self.track_embedder.artist_emb.weight.device
+        return self.track_embedder.get_device()
 
-    def to_inference_model(self) -> "PlaylistRecommenderInference":
-        return PlaylistRecommenderInference(self)
+    def to_inference_model(
+        self, freeze_track_embedder: bool = True
+    ) -> "PlaylistRecommenderInference":
+        return PlaylistRecommenderInference(self, freeze_track_embedder)
 
 
 def _handle_batching(x, device):
@@ -216,9 +224,17 @@ class Recommendation:
 
 
 class PlaylistRecommenderInference:
-    def __init__(self, model: PlaylistRecommender):
+    def __init__(self, model: PlaylistRecommender, freeze_track_embedder: bool = True):
         self.model = model
         self.tensoriser = model.tensoriser
+        self.freeze_track_embedder = freeze_track_embedder
+        self.precomputed_embeddings = None
+
+        if freeze_track_embedder:
+            frozen = FrozenTrackEmbedder.from_track_embedder(model.track_embedder)
+            self.model.track_embedder = frozen
+            self.model.head.track_embedder = frozen
+            self.precomputed_embeddings = frozen.embeddings  # [vocab_size, C]
 
     @torch.inference_mode()
     def get_recommendations(
@@ -227,20 +243,28 @@ class PlaylistRecommenderInference:
         playlist: list[int],
         top_k: int = 10,
         allowed_mask: torch.Tensor | None = None,
+        chunk_size: int | None = None
     ) -> list[Recommendation]:
         # allowed_mask: [vocab_size]
+        was_training = self.model.training
+        self.model.eval()
+
         device = self.model.get_device()
         sample = self.tensoriser.tensorise(playlist_name, playlist, inference=True)
         batch = {
             k: _handle_batching(v, device) for k, v in sample.items()
         }
-        was_training = self.model.training
-        self.model.eval()
+
         indices = self.model.top_k_indices(
-            **batch, top_k=top_k, allowed_mask=allowed_mask
+            **batch,
+            top_k=top_k,
+            allowed_mask=allowed_mask,
+            chunk_size=chunk_size,
+            precomputed_embeddings=self.precomputed_embeddings
         )
-        self.model.train(was_training)
         indices = indices.squeeze(0).tolist()  # [top_k]
+
+        self.model.train(was_training)
         return [
             Recommendation(
                 position=pos,
