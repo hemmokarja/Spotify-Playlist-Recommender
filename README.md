@@ -1,6 +1,6 @@
 # Spotify Playlist Recommender
 
-A production-grade deep learning recommendation system built on the **Spotify Million Playlist Dataset**, augmented with per-track audio attributes from the Spotify API.
+A production-oriented deep learning recommendation system built on the **Spotify Million Playlist Dataset**, augmented with per-track audio attributes from the Spotify API.
 
 The system is designed as an **autoregressive transformer decoder** that treats playlist generation as a sequence modeling task. Unlike standard recommenders that rely on static ID embeddings, this model is built for the realities of modern streaming:
 
