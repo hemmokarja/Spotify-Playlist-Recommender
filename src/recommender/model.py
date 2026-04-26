@@ -41,14 +41,6 @@ def _make_popularity_sampling_distribution(
     return probs  # [vocab_size]
 
 
-@dataclass
-class Recommendation:
-    position: int
-    track_index: int
-    track: str
-    artist: str
-
-
 class PlaylistRecommender(nn.Module):
     def __init__(
         self,
@@ -215,6 +207,14 @@ def _handle_batching(x, device):
     return x.unsqueeze(0).to(device) if isinstance(x, torch.Tensor) else [x]
 
 
+@dataclass
+class Recommendation:
+    position: int
+    track_id: int
+    track: str
+    artist: str
+
+
 class PlaylistRecommenderInference:
     def __init__(self, model: PlaylistRecommender):
         self.model = model
@@ -244,7 +244,7 @@ class PlaylistRecommenderInference:
         return [
             Recommendation(
                 position=pos,
-                track_index=ix,
+                track_id=ix,
                 track=self.tensoriser.track_id_to_name[ix],
                 artist=self.tensoriser.track_id_to_artist[ix],
             )
