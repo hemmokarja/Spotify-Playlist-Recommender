@@ -21,6 +21,93 @@ st.set_page_config(
     layout="wide",
 )
 
+# ---------------------------------------------------------------------------
+# Global CSS
+# ---------------------------------------------------------------------------
+
+GREEN = "#1DB954"
+GREEN_DARK = "#158a3e"
+
+st.markdown(
+    f"""
+    <style>
+        /* Spotify-green primary buttons */
+        div.stButton > button[kind="primary"] {{
+            background-color: {GREEN};
+            color: #fff;
+            border: none;
+        }}
+        div.stButton > button[kind="primary"]:hover {{
+            background-color: {GREEN_DARK};
+            color: #fff;
+            border: none;
+        }}
+
+        /* + add buttons (secondary) — green outline */
+        button[data-testid="baseButton-secondary"] {{
+            border-color: {GREEN};
+            color: {GREEN};
+        }}
+        button[data-testid="baseButton-secondary"]:hover {{
+            background-color: {GREEN};
+            color: #fff;
+        }}
+
+        /* Recommendation cards */
+        .rec-card {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }}
+        .rec-card:hover {{
+            border-color: {GREEN};
+            background: #f0faf4;
+        }}
+        .rec-pos {{
+            font-size: 0.8rem;
+            color: #888;
+            min-width: 24px;
+            margin-right: 10px;
+        }}
+        .rec-text {{
+            flex: 1;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .rec-artist {{
+            font-weight: 600;
+        }}
+
+        /* Tighten spacing in the playlist panel */
+        .playlist-row {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 10px;
+            border-radius: 6px;
+        }}
+        .playlist-row:hover {{
+            background: #f0faf4;
+        }}
+
+        /* Green accent on the page title */
+        h1 span.green {{ color: {GREEN}; }}
+
+        /* Reduce default top padding */
+        .block-container {{ padding-top: 2rem; }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 def _load_model(checkpoint_path: str):
     """Load model from checkpoint and store in session state."""
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -32,7 +119,10 @@ def _load_model(checkpoint_path: str):
 
 
 if "inf_model" not in st.session_state:
-    st.title("🎵 Spotify Playlist Recommender")
+    st.markdown(
+        "<h1>🎵 Spotify Playlist <span style='color:#1DB954'>Recommender</span></h1>",
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
     col_left, col_center, col_right = st.columns([1, 2, 1])
     with col_center:
@@ -95,12 +185,18 @@ def _search_add() -> None:
 _SEARCH_PLACEHOLDER = "Search tracks…"
 
 
+# Page title (visible once model is loaded)
+st.markdown(
+    "<h1 style='margin-bottom:0.2rem'>🎵 Spotify Playlist "
+    "<span style='color:#1DB954'>Recommender</span></h1>",
+    unsafe_allow_html=True,
+)
+st.markdown("<hr style='margin-top:0.4rem;margin-bottom:1rem'>", unsafe_allow_html=True)
+
 left, right = st.columns([2, 1], gap="large")
 
 
 with left:
-    st.header("Recommendations")
-
     playlist_name = st.text_input("Playlist name", placeholder="Enter a playlist name…")
 
     cols_controls = st.columns([1, 1])
@@ -151,14 +247,23 @@ with left:
             on_change=_search_add,
         )
 
-        # Top-30 list
+        # Top-30 cards
         st.subheader("Top 30 recommendations")
         top_30 = recs[:30]
         for rec in top_30:
-            row_left, row_right = st.columns([8, 1])
-            with row_left:
-                st.write(f"**{rec.artist}** — {rec.track}")
-            with row_right:
+            card_col, btn_col = st.columns([10, 1])
+            with card_col:
+                st.markdown(
+                    f"""<div class="rec-card">
+                        <span class="rec-pos">{rec.position}</span>
+                        <span class="rec-text">
+                            <span class="rec-artist">{rec.artist}</span>
+                            &nbsp;—&nbsp;{rec.track}
+                        </span>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+            with btn_col:
                 if st.button("＋", key=f"add_{rec.track_id}_{rec.position}", help="Add to playlist"):
                     _add_track(rec.track_id)
                     st.rerun()
