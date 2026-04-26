@@ -34,7 +34,7 @@ Three core engineering challenges drive the design of this system:
 
 2. **Inductive Generalization (Cold-Start).** Music catalogs are highly dynamic, with millions of tracks added annually. A "transductive" model relying on learned ID embeddings is obsolete the moment a new track is uploaded. This architecture requires an inductive approach, where track representations are computed on-the-fly from audio attributes, allowing the model to recommend items it has never seen during training.
 
-3. **Computational Scaling to Massive Vocabularies.** The dataset contains ~2.2 million unique tracks. In a traditional multi-class classification setup, a standard cross-entropy loss produces output tensors of shape`[B, T, 2,200,000]`. This creates a memory and compute bottleneck that makes training untenable. The system must move from a "dense classification" mindset to a "contrastive ranking" framework using efficient negative sampling.
+3. **Computational Scaling to Massive Vocabularies.** The dataset contains ~2.2 million unique tracks. In a traditional multi-class classification setup, a standard cross-entropy loss produces output tensors of shape`[B, T, 2_200_000]`. This creates a memory and compute bottleneck that makes training untenable. The system must move from a "dense classification" mindset to a "contrastive ranking" framework using efficient negative sampling.
 
 ---
 
