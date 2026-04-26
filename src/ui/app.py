@@ -31,14 +31,18 @@ st.markdown(
             border: none;
         }}
 
-        /* + add buttons (secondary) — green outline */
-        button[data-testid="baseButton-secondary"] {{
-            border-color: {GREEN};
-            color: {GREEN};
+        /* secondary buttons (+, -, Clear playlist) — green outline + hover */
+        div.stButton button[kind="secondary"],
+        div.stButton button[data-testid="baseButton-secondary"] {{
+            background-color: transparent !important;
+            border: 1px solid {GREEN} !important;
+            color: {GREEN} !important;
         }}
-        button[data-testid="baseButton-secondary"]:hover {{
-            background-color: {GREEN};
-            color: #fff;
+        div.stButton button[kind="secondary"]:hover,
+        div.stButton button[data-testid="baseButton-secondary"]:hover {{
+            background-color: {GREEN} !important;
+            border: 1px solid {GREEN} !important;
+            color: #fff !important;
         }}
 
         /* Recommendation cards */
@@ -52,10 +56,7 @@ st.markdown(
             border-radius: 8px;
             background: #fafafa;
         }}
-        .rec-card:hover {{
-            border-color: {GREEN};
-            background: #f0faf4;
-        }}
+
         .rec-pos {{
             font-size: 0.8rem;
             color: #888;
