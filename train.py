@@ -12,12 +12,12 @@ torch.set_float32_matmul_precision("high")
 torch.backends.cudnn.allow_tf32 = True
 
 CHECKPOINT_PATH = None  # if None, start from scratch
-N_SAMPLES_TRAIN = 2_000_000
+N_SAMPLES_TRAIN = 10_000_000
 
 MODEL_CONFIG = ModelConfig(
     n_layer=5,
     d_name=768,
-    d_model=256,
+    d_model=384,
     d_artist=None,
     d_cont=None,
     n_head=8,
@@ -36,7 +36,7 @@ TRAINER_CONFIG = TrainerConfig(
     log_interval=2048,
     compile=True,
     base_learning_rate=3e-4,
-    min_learning_rate=1e-6,
+    min_learning_rate=3e-5,
     lr_step_size=1_000_000,
     lr_gamma=0.75,
     weight_decay=1e-5,

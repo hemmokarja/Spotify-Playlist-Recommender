@@ -1,3 +1,4 @@
+import math
 from collections import namedtuple
 
 import structlog
@@ -78,6 +79,9 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
         self.loss_fn = SampledSoftmaxLoss(temperature)
 
+        # scale logits by sqrt(C) to make the logit scale invariant to model width
+        self.scale = 1.0 / math.sqrt(track_embedder.config.d_model)
+
     def loss(self, hidden, y, loss_mask: torch.Tensor | None = None):
         # hidden: [B, T, C]
         # y: [B, T]
@@ -99,8 +103,8 @@ class SampledSoftmaxPredictionHead(nn.Module):
         e_pos = self.track_embedder(y, apply_artist_dropout=False)  # [B', C]
         e_neg = self.track_embedder(sampled_indices, apply_artist_dropout=False)  # [n_samples, C]
 
-        pos_logits = (hidden * e_pos).sum(dim=1)  # [B']
-        neg_logits = hidden @ e_neg.T  # [B', n_samples]
+        pos_logits = (hidden * e_pos).sum(dim=1) * self.scale  # [B']
+        neg_logits = hidden @ e_neg.T * self.scale  # [B', n_samples]
 
         # mask false negatives
         collision_mask = y.view(-1, 1) == sampled_indices.view(1, -1)  # [B', n_samples]
