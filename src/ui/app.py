@@ -1,17 +1,9 @@
-"""Streamlit UI for the Spotify Playlist Recommender."""
-
 from __future__ import annotations
 
-# import sys
 from pathlib import Path
 
 import torch
 import streamlit as st
-
-# # Allow imports from src/ when running via `streamlit run src/ui/app.py`
-# _src = Path(__file__).resolve().parents[2]
-# if str(_src) not in sys.path:
-#     sys.path.insert(0, str(_src))
 
 from recommender.model import PlaylistRecommender
 
@@ -20,10 +12,6 @@ st.set_page_config(
     page_icon="🎵",
     layout="wide",
 )
-
-# ---------------------------------------------------------------------------
-# Global CSS
-# ---------------------------------------------------------------------------
 
 GREEN = "#1DB954"
 GREEN_DARK = "#158a3e"
@@ -186,7 +174,6 @@ def _search_add() -> None:
 _SEARCH_PLACEHOLDER = "Search tracks…"
 
 
-# Page title (visible once model is loaded)
 st.markdown(
     "<h1 style='margin-bottom:0.2rem'>🎵 Spotify Playlist "
     "<span style='color:#1DB954'>Recommender</span></h1>",
@@ -268,8 +255,6 @@ with left:
                 if st.button("＋", key=f"add_{rec.track_id}_{rec.position}", help="Add to playlist"):
                     _add_track(rec.track_id)
                     st.rerun()
-
-# ===== RIGHT: Current playlist =====
 
 with right:
     playlist_display_name = (
