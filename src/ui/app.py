@@ -212,13 +212,25 @@ with left:
                 if 0 <= tid < vocab_size:
                     allowed_mask[tid] = False
 
-        # fetch recommendations
-        recs = inf_model.get_recommendations(
-            playlist_name=playlist_name.strip(),
-            playlist=st.session_state.playlist,
-            top_k=int(top_k),
-            allowed_mask=allowed_mask,
+        # fetch recommendations — cached so that the throwaway run triggered by
+        # st.rerun() (before the playlist has actually changed) is a no-op.
+        _rec_key = (
+            playlist_name.strip(),
+            tuple(st.session_state.playlist),
+            int(top_k),
+            exclude_added,
         )
+        if st.session_state.get("_rec_key") != _rec_key:
+            recs = inf_model.get_recommendations(
+                playlist_name=playlist_name.strip(),
+                playlist=st.session_state.playlist,
+                top_k=int(top_k),
+                allowed_mask=allowed_mask,
+            )
+            st.session_state["_rec_key"] = _rec_key
+            st.session_state["_recs"] = recs
+        else:
+            recs = st.session_state["_recs"]
 
         # search selectbox over all top_k results
         label_to_id: dict[str, int] = {
