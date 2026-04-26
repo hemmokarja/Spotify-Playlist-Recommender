@@ -125,8 +125,8 @@ KAGGLE_API_TOKEN=<your_kaggle_api_token>
 HF_TOKEN=<your_huggingface_token>
 ```
 
-- **`KAGGLE_API_TOKEN`** — required to download the Spotify Million Playlist Dataset via the Kaggle API.
-- **`HF_TOKEN`** — required to download [Embedding Gemma (300M)](https://huggingface.co/google/embeddinggemma-300m), which is a gated model on Hugging Face.
+- `KAGGLE_API_TOKEN` — required to download the Spotify Million Playlist Dataset via the Kaggle API.
+- `HF_TOKEN` — required to download [Embedding Gemma (300M)](https://huggingface.co/google/embeddinggemma-300m), which is a gated model on Hugging Face.
 
 ### 3. Load and prepare data
 
