@@ -6,6 +6,20 @@ The model operates as an autoregressive **next-track predictor**: given a playli
 
 ---
 
+## Examples
+
+Type "Trance" as a playlist name and it immediately surfaces the genre's canonical names: Armin van Buuren, ATB, Above & Beyond. Exactly what you'd expect.
+
+![name](assets/images/recs_name.png)
+
+Add two tracks - *Alice DJ — Better Off Alone* and *DJ Sammy - Heaven* — the recommendations transform. The model picks up that you're not after deep prog-trance; you want the euphoric, Eurodance-inflected sound of the late 90s. Suddenly it's serving Darude, Haddaway, Vengaboys, Ian van Dahl.
+
+![name_and_songs](assets/images/recs_name_and_songs.png)
+
+The genre name serves as a starting point; once you add a few tracks, the recommendations quickly start to reflect what you're actually in the mood for.
+
+---
+
 ## Problem Statement
 
 Three interconnected challenges drive the design of this system:
@@ -131,12 +145,6 @@ A web interface to generate and explore playlists using the trained model. Run i
 ```bash
 ./run_ui.sh
 ```
-
-### Examples
-
-*Recommendations generated from the playlist name "trance" with two seed tracks. Top results are canonical late-90s trance without any further input.*
-
-![Alt text](assets/images/recs_trance.png)
 
 ## License
 

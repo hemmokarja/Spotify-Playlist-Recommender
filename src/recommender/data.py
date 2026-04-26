@@ -36,6 +36,13 @@ class Tensoriser:
         self.track_id_to_name = dict(zip(tracks.track_id, tracks.track_name))
         self.track_id_to_artist = dict(zip(tracks.track_id, tracks.artist_name))
 
+    def make_track_mask(
+        self, track_ids: list[int] | torch.Tensor, device: str | torch.device = "cpu"
+    ) -> torch.Tensor:
+        mask = torch.zeros(self.vocab_size, dtype=torch.bool, device=device)
+        mask[track_ids] = True
+        return mask
+
     def tensorise(
         self, playlist_name: str, playlist: np.ndarray, inference: bool = False
     ) -> dict:

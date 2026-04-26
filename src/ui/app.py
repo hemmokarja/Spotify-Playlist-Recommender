@@ -13,6 +13,8 @@ st.set_page_config(
     layout="wide",
 )
 
+SHOW_TOP_K = 30
+
 GREEN = "#1DB954"
 GREEN_DARK = "#158a3e"
 
@@ -205,13 +207,12 @@ with left:
     if not playlist_name.strip():
         st.info("Give the playlist a name to see recommendations")
     else:
-        # build allowed_mask
+        
         allowed_mask: torch.Tensor | None = None
         if exclude_added and st.session_state.playlist:
-            allowed_mask = torch.ones(vocab_size, dtype=torch.bool)
-            for tid in st.session_state.playlist:
-                if 0 <= tid < vocab_size:
-                    allowed_mask[tid] = False
+            allowed_mask = ~inf_model.tensoriser.make_track_mask(
+                st.session_state.playlist
+            )
 
         # fetch recommendations — cached so that the throwaway run triggered by
         # st.rerun() (before the playlist has actually changed) is a no-op.
@@ -248,10 +249,8 @@ with left:
             on_change=_search_add,
         )
 
-        # Top-30 cards
-        st.subheader("Top 30 recommendations")
-        top_30 = recs[:30]
-        for rec in top_30:
+        st.subheader("You might like next")
+        for rec in recs[:SHOW_TOP_K]:
             card_col, btn_col = st.columns([10, 1])
             with card_col:
                 st.markdown(
@@ -265,7 +264,11 @@ with left:
                     unsafe_allow_html=True,
                 )
             with btn_col:
-                if st.button("＋", key=f"add_{rec.track_id}_{rec.position}", help="Add to playlist"):
+                if st.button(
+                    "＋",
+                    key=f"add_{rec.track_id}_{rec.position}",
+                    help="Add to playlist"
+                ):
                     _add_track(rec.track_id)
                     st.rerun()
 
