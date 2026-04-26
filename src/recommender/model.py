@@ -231,10 +231,13 @@ class PlaylistRecommenderInference:
         self.precomputed_embeddings = None
 
         if freeze_track_embedder:
+            was_training = self.model.training
+            self.model.eval()
             frozen = FrozenTrackEmbedder.from_track_embedder(model.track_embedder)
             self.model.track_embedder = frozen
             self.model.head.track_embedder = frozen
             self.precomputed_embeddings = frozen.embeddings  # [vocab_size, C]
+            self.model.train(was_training)
 
     @torch.inference_mode()
     def get_recommendations(
