@@ -15,4 +15,3 @@ class ModelConfig:
     n_neg_samples: int = 1000
     smoothing_factor: float = 1.0
     uniform_mix_factor: float | None = None
-    loss_temperature: float = 1.0

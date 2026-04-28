@@ -28,7 +28,6 @@ MODEL_CONFIG = ModelConfig(
     n_neg_samples=15_000,
     smoothing_factor=0.75,
     uniform_mix_factor=0.1,
-    loss_temperature=1.0
 )
 TRAINER_CONFIG = TrainerConfig(
     batch_size=2048,

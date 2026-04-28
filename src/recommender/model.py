@@ -69,7 +69,6 @@ class PlaylistRecommender(nn.Module):
             track_embedder=self.track_embedder,
             sampling_probs=sampling_probs,
             n_neg_samples=config.n_neg_samples,
-            temperature=config.loss_temperature,
         )
 
         self.apply(self._init_weights)
