@@ -82,11 +82,11 @@ With ~2.2M tracks in the vocabulary, standard cross-entropy is not viable. The `
 - **Popularity-based negative sampling** — negatives are drawn proportionally to how frequently each track appears in the dataset, with configurable smoothing (`smoothing_factor`) and optional uniform mixing (`uniform_mix_factor`) to prevent over-concentration on head items.
 - **Log-Q correction (importance sampling)** — to correct for the bias introduced by non-uniform sampling, each logit is adjusted by subtracting $\log Q(y)$, where $Q(y)$ is the sampling probability of item $y$. This recovers an unbiased estimate of the full softmax:
 
-$$\tilde{z}_i = \frac{z_i}{T} - \log Q(y_i)$$
+$$\tilde{z}_i = T \cdot \cos(h, e_i) - \log Q(y_i)$$
 
 - The corrected positive and negative logits are concatenated and passed to a standard cross-entropy loss, reducing each training step to an `[B, 1 + n_neg_samples]` operation rather than `[B, 2_200_000]`.
 - **False negative masking** — when a sampled negative happens to collide with the true positive for a given example, it is masked out of the loss rather than penalised as a negative. This prevents contradictory gradient signals on items that are genuinely good next-track predictions.
-- **Logit scaling** — dot-product logits are scaled by `1/sqrt(d_model)`, keeping the logit magnitude invariant to model width.
+- **Temperature-scaled cosine similarity** — hidden states and candidate embeddings are L2-normalised before scoring, so all logits are cosine similarities bounded in `[-1, 1]`. A learnable scalar temperature then scales these similarities, letting the model learn the optimal sharpness of the softmax distribution during training.
 
 This setup creates **two distinct gradient paths into `TrackEmbedder`**:
 1. **Through the hidden states** — `TrackEmbedder` embeds the input sequence; those embeddings flow through the full transformer stack whose output is then compared against item vectors. This path teaches the embedder to produce representations that the transformer can meaningfully contextualise.
