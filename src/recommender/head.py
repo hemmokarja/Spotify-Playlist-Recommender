@@ -14,17 +14,19 @@ _TEMP_CLAMP = 4.6  # ≈ln(100)
 
 
 def _cosine_logits(
-    hidden: torch.Tensor,
-    embeddings: torch.Tensor,
-    log_temperature: torch.Tensor,
+    hidden: torch.Tensor, embeddings: torch.Tensor, temperature: torch.Tensor,
 ) -> torch.Tensor:
     h = F.normalize(hidden, dim=-1)
     e = F.normalize(embeddings, dim=-1)
-    # clamped at 4.6 ≈ ln(100) to prevent explosion
-    return (h @ e.T) * log_temperature.clamp(max=_TEMP_CLAMP).exp()
+    return (h @ e.T) * temperature
 
 
-def _sampled_softmax_loss(pos_logits, neg_logits, true_probs, sample_probs):
+def _sampled_softmax_loss(
+    pos_logits: torch.Tensor,
+    neg_logits: torch.Tensor,
+    true_probs: torch.Tensor,
+    sample_probs: torch.Tensor,
+) -> torch.Tensor:
     # pos_logits: [B] logits for positive items (already temperature-scaled)
     # neg_logits: [B, n_samples] logits for negative items (already temperature-scaled)
     # true_probs: [B] sampling probabilities for positive items
@@ -84,10 +86,14 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
 
         # Learnable log-temperature, initialised à la CLIP (1/0.07 ≈ 14.3 → log ≈ 2.66).
-        # Clamped at ln(100) ≈ 4.6 at use-sites to prevent logit explosion.
         self.log_temperature = nn.Parameter(
             torch.tensor(math.log(1.0 / temperature_init))
         )
+
+    @property
+    def temperature(self) -> torch.Tensor:
+        """Clamped at ln(100) ≈ 4.6 to prevent logit explosion."""
+        return self.log_temperature.clamp(max=_TEMP_CLAMP).exp()
 
     def loss(
         self,
@@ -117,10 +123,9 @@ class SampledSoftmaxPredictionHead(nn.Module):
 
         hidden_n = F.normalize(hidden, dim=-1)  # [B', C]
         e_pos_n = F.normalize(e_pos, dim=-1)
-        temp = self.log_temperature.clamp(max=_TEMP_CLAMP).exp()
-        pos_logits = (hidden_n * e_pos_n).sum(dim=1) * temp  # [B']
+        pos_logits = (hidden_n * e_pos_n).sum(dim=1) * self.temperature  # [B']
 
-        neg_logits = _cosine_logits(hidden, e_neg, self.log_temperature)   # [B', n_samples]
+        neg_logits = _cosine_logits(hidden, e_neg, self.temperature)   # [B', n_samples]
 
         # mask false negatives
         collision_mask = y.view(-1, 1) == sampled_indices.view(1, -1)  # [B', n_samples]
@@ -140,7 +145,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=hidden.device)
         e_track = self.track_embedder(all_indices, apply_artist_dropout=False)  # [vocab_size, C]
-        logits = _cosine_logits(hidden, e_track, self.log_temperature)  # [B, vocab_size]
+        logits = _cosine_logits(hidden, e_track, self.temperature)  # [B, vocab_size]
 
         if allowed_mask is not None:
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
@@ -169,7 +174,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
                     apply_artist_dropout=False,
                 )
             )  # [vocab_size, C]
-            logits = _cosine_logits(hidden, e_all, self.log_temperature)  # [B, vocab_size]
+            logits = _cosine_logits(hidden, e_all, self.temperature)  # [B, vocab_size]
             if allowed_mask is not None:
                 logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
             return torch.topk(logits, k, dim=1).indices  # [B, k]
@@ -190,7 +195,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
                 if precomputed_embeddings is not None
                 else self.track_embedder(indices, apply_artist_dropout=False)
             )  # [chunk, C]
-            chunk_logits = _cosine_logits(hidden, e_chunk, self.log_temperature)  # [B, chunk]
+            chunk_logits = _cosine_logits(hidden, e_chunk, self.temperature)  # [B, chunk]
 
             if allowed_mask is not None:
                 chunk_logits = chunk_logits.masked_fill(
