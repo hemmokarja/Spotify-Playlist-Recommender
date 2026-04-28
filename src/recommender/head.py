@@ -10,6 +10,31 @@ from recommender.layers import TrackEmbedder
 
 logger = structlog.get_logger(__name__)
 
+_TEMP_CLAMP = 4.6  # ≈ln(100)
+
+
+def _cosine_logits(
+    hidden: torch.Tensor,
+    embeddings: torch.Tensor,
+    log_temperature: torch.Tensor,
+) -> torch.Tensor:
+    h = F.normalize(hidden, dim=-1)
+    e = F.normalize(embeddings, dim=-1)
+    # clamped at 4.6 ≈ ln(100) to prevent explosion
+    return (h @ e.T) * log_temperature.clamp(max=_TEMP_CLAMP).exp()
+
+
+def _sampled_softmax_loss(pos_logits, neg_logits, true_probs, sample_probs):
+    # pos_logits: [B] logits for positive items (already temperature-scaled)
+    # neg_logits: [B, n_samples] logits for negative items (already temperature-scaled)
+    # true_probs: [B] sampling probabilities for positive items
+    # sample_probs: [n_samples] sampling probabilities for negatives
+    pos_logits = pos_logits - torch.log(true_probs + 1e-10)  # [B]
+    neg_logits = neg_logits - torch.log(sample_probs.unsqueeze(0) + 1e-10)  # [B, n_samples]
+    logits = torch.cat([pos_logits.unsqueeze(1), neg_logits], dim=1)  # [B, 1+n_samples]
+    labels = torch.zeros(logits.size(0), dtype=torch.long, device=logits.device)  # [B]
+    return F.cross_entropy(logits, labels)  # scalar
+
 
 _SamplerOutput = namedtuple(
     "SamplerOutput", ["sampled_indices", "true_probs", "sample_probs"]
@@ -40,33 +65,13 @@ class Sampler(nn.Module):
         return _SamplerOutput(sampled_indices, true_probs, sample_probs)
 
 
-class SampledSoftmaxLoss(nn.Module):
-    def __init__(self, temperature: float = 1.0):
-        super().__init__()
-        self.temperature = temperature
-
-    def forward(self, pos_logits, neg_logits, true_probs, sample_probs):
-        # pos_logits: [B] logits for positive items
-        # neg_logits: [B, n_samples] logits for negative items
-        # true_probs: [B] sampling probabilities for positive items
-        # sample_probs: [n_samples] sampling probabilities for negatives
-        pos_logits = pos_logits / self.temperature - torch.log(true_probs + 1e-10)  # [B]
-        neg_logits = neg_logits / self.temperature - torch.log(
-            sample_probs.unsqueeze(0) + 1e-10
-        )  # [B, n_samples]
-
-        logits = torch.cat([pos_logits.unsqueeze(1), neg_logits], dim=1)  # [B, 1+n_samples]
-        labels = torch.zeros(logits.size(0), dtype=torch.long, device=logits.device)  # [B]
-        return F.cross_entropy(logits, labels)  # scalar
-
-
 class SampledSoftmaxPredictionHead(nn.Module):
     def __init__(
         self,
         track_embedder: TrackEmbedder,
         sampling_probs: torch.Tensor,
         n_neg_samples: int,
-        temperature: float = 1.0,
+        temperature_init: float = 0.07,
     ):
         super().__init__()
         # NOTE about using track_embedder in the head: we should never apply artist
@@ -77,13 +82,12 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.vocab_size = len(sampling_probs)
 
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
-        self.loss_fn = SampledSoftmaxLoss(temperature)
 
-        # hidden and item emb have both unit-variance enforced by layer norms, and thus,
-        # their dot product has expected maginitude of sqrt(C); dividing logits by 
-        # sqrt(C) makes their scale invariant to model size (inspired by scaling in
-        # dot-product attention)
-        self.scale = 1.0 / math.sqrt(track_embedder.config.d_model)
+        # Learnable log-temperature, initialised à la CLIP (1/0.07 ≈ 14.3 → log ≈ 2.66).
+        # Clamped at ln(100) ≈ 4.6 at use-sites to prevent logit explosion.
+        self.log_temperature = nn.Parameter(
+            torch.tensor(math.log(1.0 / temperature_init))
+        )
 
     def loss(
         self,
@@ -111,14 +115,18 @@ class SampledSoftmaxPredictionHead(nn.Module):
         e_pos = self.track_embedder(y, apply_artist_dropout=False)  # [B', C]
         e_neg = self.track_embedder(sampled_indices, apply_artist_dropout=False)  # [n_samples, C]
 
-        pos_logits = (hidden * e_pos).sum(dim=1) * self.scale  # [B']
-        neg_logits = hidden @ e_neg.T * self.scale  # [B', n_samples]
+        hidden_n = F.normalize(hidden, dim=-1)  # [B', C]
+        e_pos_n = F.normalize(e_pos, dim=-1)
+        temp = self.log_temperature.clamp(max=_TEMP_CLAMP).exp()
+        pos_logits = (hidden_n * e_pos_n).sum(dim=1) * temp  # [B']
+
+        neg_logits = _cosine_logits(hidden, e_neg, self.log_temperature)   # [B', n_samples]
 
         # mask false negatives
         collision_mask = y.view(-1, 1) == sampled_indices.view(1, -1)  # [B', n_samples]
         neg_logits = neg_logits.masked_fill(collision_mask, -1e9)
 
-        return self.loss_fn(
+        return _sampled_softmax_loss(
             pos_logits,
             neg_logits,
             sampler_output.true_probs,
@@ -132,7 +140,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
         # allowed_mask: [vocab_size] (optional)
         all_indices = torch.arange(self.vocab_size, device=hidden.device)
         e_track = self.track_embedder(all_indices, apply_artist_dropout=False)  # [vocab_size, C]
-        logits = hidden @ e_track.T
+        logits = _cosine_logits(hidden, e_track, self.log_temperature)  # [B, vocab_size]
 
         if allowed_mask is not None:
             logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
@@ -161,7 +169,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
                     apply_artist_dropout=False,
                 )
             )  # [vocab_size, C]
-            logits = hidden @ e_all.T  # [B, vocab_size]
+            logits = _cosine_logits(hidden, e_all, self.log_temperature)  # [B, vocab_size]
             if allowed_mask is not None:
                 logits = logits.masked_fill(~allowed_mask.unsqueeze(0), float("-inf"))
             return torch.topk(logits, k, dim=1).indices  # [B, k]
@@ -182,7 +190,7 @@ class SampledSoftmaxPredictionHead(nn.Module):
                 if precomputed_embeddings is not None
                 else self.track_embedder(indices, apply_artist_dropout=False)
             )  # [chunk, C]
-            chunk_logits = hidden @ e_chunk.T  # [B, chunk]
+            chunk_logits = _cosine_logits(hidden, e_chunk, self.log_temperature)  # [B, chunk]
 
             if allowed_mask is not None:
                 chunk_logits = chunk_logits.masked_fill(
