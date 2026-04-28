@@ -79,7 +79,10 @@ class SampledSoftmaxPredictionHead(nn.Module):
         self.sampler = Sampler(sampling_probs, n_neg_samples, replacement=True)
         self.loss_fn = SampledSoftmaxLoss(temperature)
 
-        # scale logits by sqrt(C) to make the logit scale invariant to model width
+        # hidden and item emb have both unit-variance enforced by layer norms, and thus,
+        # their dot product has expected maginitude of sqrt(C); dividing logits by 
+        # sqrt(C) makes their scale invariant to model size (inspired by scaling in
+        # dot-product attention)
         self.scale = 1.0 / math.sqrt(track_embedder.config.d_model)
 
     def loss(
