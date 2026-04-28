@@ -48,6 +48,14 @@ def _make_padding_row(df):
     return pd.DataFrame([pad_values])
 
 
+def _minmax_scale(tracks, train_tracks, features):
+    for feature in features:
+        min_val = train_tracks[feature].min()
+        max_val = train_tracks[feature].max()
+        tracks[feature] = (tracks[feature] - min_val) / (max_val - min_val)
+    return tracks
+
+
 def _count_train_observations(train_playlists, tracks):
     n_obs = train_playlists.groupby("track_uri").size().reset_index(name="n_obs")
     tracks = tracks.merge(n_obs, on="track_uri", how="left")
@@ -95,6 +103,8 @@ def main():
     tracks["mode_index"] = tracks["mode"].map(mode_to_index)
     tracks["key_index"] = tracks.key.map(key_to_index)
     tracks["time_signature_index"] = tracks.time_signature.map(time_signature_to_index)
+
+    tracks = _minmax_scale(tracks, train_tracks, ["loudness", "tempo"])
 
     pad_row = _make_padding_row(tracks)
     tracks = pd.concat([pad_row, tracks])
